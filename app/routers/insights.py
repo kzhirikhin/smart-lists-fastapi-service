@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Header, HTTPException
 from app.models.insights import InsightRequest, InsightResponse
 from app.core.config import settings
+from app.services import ai
 
 router = APIRouter()
 
@@ -14,7 +15,10 @@ async def get_insight(
     if authorization != expected:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Пока заглушка вместо реального AI
-    return InsightResponse(
-        insight=f"Анализирую список '{request.title}' с {len(request.items)} позициями..."
+    insight_text = ai.get_insight(
+        title=request.title,
+        items=request.items,
+        user_message=request.user_message
     )
+
+    return InsightResponse(insight=insight_text)
