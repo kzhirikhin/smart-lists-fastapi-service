@@ -8,5 +8,3 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 settings = Settings()
-
-# TODO:обновить .env файл и добавить в него переменные окружения
