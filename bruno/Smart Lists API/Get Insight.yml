@@ -1,0 +1,28 @@
+info:
+  name: Get Insight
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{base_url}}/insights"
+  headers:
+    - name: Authorization
+      value: Bearer {{secret}}
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "title": "Покупки",
+        "items": ["молоко", "хлеб", "яйца"],
+        "user_message": null
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
