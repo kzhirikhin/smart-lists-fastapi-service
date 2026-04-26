@@ -68,6 +68,60 @@ def test_insights_missing_auth():
     assert response.status_code == 422  # Pydantic: обязательное поле отсутствует
 
 
+def test_insights_empty_title():
+    response = client.post(
+        "/insights",
+        json={"title": "", "items": []},
+        headers={"Authorization": "Bearer test-secret-123"}
+    )
+    assert response.status_code == 422
+
+
+def test_insights_title_too_long():
+    response = client.post(
+        "/insights",
+        json={"title": "x" * 201, "items": []},
+        headers={"Authorization": "Bearer test-secret-123"}
+    )
+    assert response.status_code == 422
+
+
+def test_insights_user_message_too_long():
+    response = client.post(
+        "/insights",
+        json={"title": "Test", "items": [], "user_message": "x" * 501},
+        headers={"Authorization": "Bearer test-secret-123"}
+    )
+    assert response.status_code == 422
+
+
+def test_insights_too_many_items():
+    response = client.post(
+        "/insights",
+        json={"title": "Test", "items": ["item"] * 51},
+        headers={"Authorization": "Bearer test-secret-123"}
+    )
+    assert response.status_code == 422
+
+
+def test_insights_item_too_long():
+    response = client.post(
+        "/insights",
+        json={"title": "Test", "items": ["x" * 201]},
+        headers={"Authorization": "Bearer test-secret-123"}
+    )
+    assert response.status_code == 422
+
+
+def test_insights_empty_item():
+    response = client.post(
+        "/insights",
+        json={"title": "Test", "items": [""]},
+        headers={"Authorization": "Bearer test-secret-123"}
+    )
+    assert response.status_code == 422
+
+
 def test_insights_empty_items():
     with patch("app.services.ai.client.messages.create") as mock_create:
         mock_create.return_value = make_mock_response("Список пуст, анализировать нечего")
