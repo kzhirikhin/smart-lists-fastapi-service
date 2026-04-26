@@ -122,6 +122,23 @@ def test_insights_empty_item():
     assert response.status_code == 422
 
 
+def test_insights_user_message_whitespace_only():
+    with patch("app.services.ai.client.messages.create") as mock_create:
+        mock_create.return_value = make_mock_response("Инсайт без вопроса")
+
+        response = client.post(
+            "/insights",
+            json={"title": "Test", "items": [], "user_message": "     "},
+            headers={"Authorization": "Bearer test-secret-123"}
+        )
+
+        assert response.status_code == 200
+        # user_message должен стать None — проверяем что Claude вызван с None
+        call_kwargs = mock_create.call_args
+        messages = call_kwargs.kwargs["messages"] if call_kwargs.kwargs else call_kwargs[1]["messages"]
+        assert "<user_input>не указан</user_input>" in messages[0]["content"]
+
+
 def test_insights_empty_items():
     with patch("app.services.ai.client.messages.create") as mock_create:
         mock_create.return_value = make_mock_response("Список пуст, анализировать нечего")
