@@ -12,7 +12,11 @@ from app.routers.insights import router
 setup_logging()
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Smart Lists AI Service")
+app = FastAPI(
+    title="Smart Lists AI Service",
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+)
 
 app.include_router(router)
 
