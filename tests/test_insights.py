@@ -29,8 +29,12 @@ def test_insights_success():
             "/insights",
             json={
                 "title": "Тест",
-                "items": ["item1", "item2"],
-                "user_message": None
+                "items": [
+                    {"name": "item1", "is_completed": False},
+                    {"name": "item2", "is_completed": True},
+                ],
+                "groups": ["Работа"],
+                "user_message": None,
             },
             headers={"Authorization": "Bearer test-secret-123"}
         )
@@ -45,8 +49,8 @@ def test_insights_wrong_secret():
         "/insights",
         json={
             "title": "Тест",
-            "items": ["item1"],
-            "user_message": None
+            "items": [{"name": "item1", "is_completed": False}],
+            "user_message": None,
         },
         headers={"Authorization": "Bearer wrong-secret"}
     )
@@ -59,8 +63,8 @@ def test_insights_missing_auth():
         "/insights",
         json={
             "title": "Тест",
-            "items": ["item1"],
-            "user_message": None
+            "items": [{"name": "item1", "is_completed": False}],
+            "user_message": None,
         }
         # заголовок Authorization не передаём вообще
     )
@@ -98,7 +102,7 @@ def test_insights_user_message_too_long():
 def test_insights_too_many_items():
     response = client.post(
         "/insights",
-        json={"title": "Test", "items": ["item"] * 51},
+        json={"title": "Test", "items": [{"name": "item", "is_completed": False}] * 51},
         headers={"Authorization": "Bearer test-secret-123"}
     )
     assert response.status_code == 422
@@ -107,7 +111,7 @@ def test_insights_too_many_items():
 def test_insights_item_too_long():
     response = client.post(
         "/insights",
-        json={"title": "Test", "items": ["x" * 201]},
+        json={"title": "Test", "items": [{"name": "x" * 201, "is_completed": False}]},
         headers={"Authorization": "Bearer test-secret-123"}
     )
     assert response.status_code == 422
@@ -116,7 +120,7 @@ def test_insights_item_too_long():
 def test_insights_empty_item():
     response = client.post(
         "/insights",
-        json={"title": "Test", "items": [""]},
+        json={"title": "Test", "items": [{"name": "", "is_completed": False}]},
         headers={"Authorization": "Bearer test-secret-123"}
     )
     assert response.status_code == 422

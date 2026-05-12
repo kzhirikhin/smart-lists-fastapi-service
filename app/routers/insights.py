@@ -18,11 +18,16 @@ async def get_insight(
     if authorization != expected:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    logger.info("Insight requested: items=%d has_user_msg=%s", len(request.items), request.user_message is not None)
+    completed_count = sum(1 for i in request.items if i.is_completed)
+    logger.info(
+        "Insight requested: items=%d completed=%d groups=%d has_user_msg=%s",
+        len(request.items), completed_count, len(request.groups), request.user_message is not None
+    )
 
     insight_text = ai.get_insight(
         title=request.title,
         items=request.items,
+        groups=request.groups,
         user_message=request.user_message
     )
 
