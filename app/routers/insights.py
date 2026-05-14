@@ -25,7 +25,7 @@ async def get_insight(
         len(request.items), completed_count, len(request.groups), request.user_message is not None
     )
 
-    insight_text = ai.get_insight(
+    insight_text = await ai.get_insight(
         title=request.title,
         items=request.items,
         groups=request.groups,

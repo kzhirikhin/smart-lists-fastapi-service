@@ -2,9 +2,12 @@ import anthropic
 from app.core.config import settings
 from app.models.insights import ListItem
 
-client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+client = anthropic.AsyncAnthropic(
+    api_key=settings.anthropic_api_key,
+    timeout=30.0,
+)
 
-def get_insight(title: str, items: list[ListItem], groups: list[str], user_message: str | None) -> str:
+async def get_insight(title: str, items: list[ListItem], groups: list[str], user_message: str | None) -> str:
     item_count = len(items)
     if item_count <= 5:
         depth_instruction = "Отвечай кратко (3-4 предложения)"
@@ -43,7 +46,7 @@ def get_insight(title: str, items: list[ListItem], groups: list[str], user_messa
 {items_text.strip()}
 <user_input>{user_message if user_message else "не указан"}</user_input>"""
 
-    message = client.messages.create(
+    message = await client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=2048,
         system=system_prompt,

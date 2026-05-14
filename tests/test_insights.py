@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -22,7 +22,7 @@ def test_health():
 
 
 def test_insights_success():
-    with patch("app.services.ai.client.messages.create") as mock_create:
+    with patch("app.services.ai.client.messages.create", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = make_mock_response("Тестовый инсайт от Claude")
 
         response = client.post(
@@ -127,7 +127,7 @@ def test_insights_empty_item():
 
 
 def test_insights_user_message_whitespace_only():
-    with patch("app.services.ai.client.messages.create") as mock_create:
+    with patch("app.services.ai.client.messages.create", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = make_mock_response("Инсайт без вопроса")
 
         response = client.post(
@@ -144,7 +144,7 @@ def test_insights_user_message_whitespace_only():
 
 
 def test_insights_empty_items():
-    with patch("app.services.ai.client.messages.create") as mock_create:
+    with patch("app.services.ai.client.messages.create", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = make_mock_response("Список пуст, анализировать нечего")
 
         response = client.post(
