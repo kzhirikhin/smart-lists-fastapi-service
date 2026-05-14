@@ -1,3 +1,4 @@
+import hmac
 import logging
 
 from fastapi import APIRouter, Header, HTTPException
@@ -15,7 +16,7 @@ async def get_insight(
     authorization: str = Header(...)
 ):
     expected = f"Bearer {settings.service_secret}"
-    if authorization != expected:
+    if not hmac.compare_digest(authorization, expected):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     completed_count = sum(1 for i in request.items if i.is_completed)
