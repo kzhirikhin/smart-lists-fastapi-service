@@ -1,0 +1,9 @@
+services:
+  fastapi:
+    image: ghcr.io/kiriu237011/smart-lists-fastapi-service:latest
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SERVICE_SECRET=${SERVICE_SECRET}
