@@ -21,6 +21,9 @@ jobs:
 
       - name: Run tests
         run: pytest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SHARED_SECRET: ${{ secrets.SHARED_SECRET }}
 
   deploy:
     needs: test
