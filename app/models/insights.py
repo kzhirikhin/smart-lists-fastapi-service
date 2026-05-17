@@ -1,11 +1,14 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Annotated, Optional
 
-ListItem = Annotated[str, Field(min_length=1, max_length=200)]
+class ListItem(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    is_completed: bool
 
 class InsightRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     items: list[ListItem] = Field(max_length=50)
+    groups: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(default_factory=list, max_length=20)
     user_message: Optional[str] = Field(default=None, max_length=500)
 
     @field_validator("user_message", mode="before")

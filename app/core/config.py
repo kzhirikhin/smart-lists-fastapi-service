@@ -5,5 +5,6 @@ class Settings(BaseSettings):
 
     service_secret: str
     anthropic_api_key: str
+    debug: bool = False
 
-settings = Settings()
+settings = Settings() # type: ignore[call-arg]
