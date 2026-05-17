@@ -53,5 +53,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ~/smart-lists-fastapi
+            curl -o docker-compose.yml https://raw.githubusercontent.com/kiriu237011/smart-lists-fastapi-service/main/docker-compose.yml
             docker compose pull
             docker compose up -d
