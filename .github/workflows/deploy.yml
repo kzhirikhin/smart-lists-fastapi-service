@@ -1,9 +1,15 @@
-name: Deploy to EC2
+name: Deploy to Cloud Run
 
 on:
   push:
     branches:
       - main
+
+env:
+  PROJECT_ID: project-5b7c1bd1-572b-410d-826
+  REGION: us-central1
+  SERVICE: insights-api
+  IMAGE: us-central1-docker.pkg.dev/project-5b7c1bd1-572b-410d-826/smart-lists/insights-api
 
 jobs:
   test:
@@ -28,31 +34,37 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to ghcr.io
-        uses: docker/login-action@v3.3.0
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          workload_identity_provider: projects/912709146180/locations/global/workloadIdentityPools/github/providers/github-provider
+          service_account: github-deployer@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com
 
-      - name: Build and push Docker image
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/kiriu237011/smart-lists-fastapi-service:latest
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd ~/smart-lists-fastapi
-            curl -o docker-compose.yml https://raw.githubusercontent.com/kiriu237011/smart-lists-fastapi-service/main/docker-compose.yml
-            docker compose pull
-            docker compose up -d
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image ${{ env.IMAGE }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --quiet
