@@ -16,7 +16,11 @@ http:
     data: |-
       {
         "title": "Покупки",
-        "items": ["молоко", "хлеб", "яйца"],
+        "items": [
+          { "name": "молоко", "is_completed": false },
+          { "name": "хлеб", "is_completed": false },
+          { "name": "яйца", "is_completed": false }
+        ],
         "user_message": null
       }
   auth: inherit

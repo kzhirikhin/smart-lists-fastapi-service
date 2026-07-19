@@ -1,6 +1,6 @@
 name: local
 variables:
   - name: base_url
-    value: http://127.0.0.1:8000
+    value: https://insights-api-912709146180.us-central1.run.app
   - secret: true
     name: secret
