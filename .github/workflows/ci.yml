@@ -1,0 +1,76 @@
+name: CI
+
+# Проверки для каждой ветки и каждого PR. Ничего не деплоит.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# Новый пуш в ту же ветку отменяет предыдущий незавершённый прогон.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    # Первое условие: push в main уже гоняет тесты в deploy.yml как гейт перед
+    # выкладкой — второй раз здесь не нужен.
+    # Второе: ветка внутри репозитория покрыта событием push, поэтому её PR дал
+    # бы второй прогон того же коммита. Остаются только PR из форков.
+    if: >-
+      (github.event_name != 'push' || github.ref != 'refs/heads/main') &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name != github.repository)
+
+    # Заведомо нерабочие значения — см. комментарий в deploy.yml.
+    env:
+      SERVICE_SECRET: test-secret-123
+      ANTHROPIC_API_KEY: test-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+  # Секреты в истории. На приватном репозитории secret scanning от GitHub
+  # недоступен, так что это единственная проверка такого рода. Плюс gitleaks
+  # ловит generic-строки — приватные ключи, строки подключения, — которые
+  # push protection не знает.
+  secrets:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Вся история, а не последний коммит: секрет, добавленный и удалённый
+          # внутри одной ветки, остаётся в промежуточных коммитах.
+          fetch-depth: 0
+
+      # Бинарь официального релиза вместо стороннего action: в job попадает
+      # только то, что мы явно назвали версией.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+
+      # --redact: найденное значение не печатается в лог.
+      - name: Scan history
+        run: gitleaks git --redact --verbose .

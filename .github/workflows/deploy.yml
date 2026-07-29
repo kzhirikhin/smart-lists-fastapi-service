@@ -5,6 +5,15 @@ on:
     branches:
       - main
 
+# Токен по умолчанию только на чтение; job deploy добирает id-token сама.
+permissions:
+  contents: read
+
+# Две выкладки одновременно не гоняем, но начатую не отменяем.
+concurrency:
+  group: deploy-cloud-run
+  cancel-in-progress: false
+
 env:
   PROJECT_ID: project-5b7c1bd1-572b-410d-826
   REGION: us-central1
