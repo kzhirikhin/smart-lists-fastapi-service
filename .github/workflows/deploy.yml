@@ -25,11 +25,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # Заведомо нерабочие значения. Нужны только чтобы прошла валидация
+      # Settings при импорте приложения: до сети тесты не доходят — клиент
+      # Anthropic замокан, а settings подменяется фикстурой в conftest.py.
       - name: Run tests
         run: pytest
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SERVICE_SECRET: ${{ secrets.SHARED_SECRET }}
+          ANTHROPIC_API_KEY: test-key
+          SERVICE_SECRET: test-secret-123
 
   deploy:
     needs: test
