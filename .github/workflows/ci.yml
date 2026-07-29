@@ -33,11 +33,12 @@ jobs:
       ANTHROPIC_API_KEY: test-key
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          # Версия должна совпадать с Python в production-образе из Dockerfile.
+          python-version: '3.13'
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -56,7 +57,7 @@ jobs:
       github.event.pull_request.head.repo.full_name != github.repository
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Вся история, а не последний коммит: секрет, добавленный и удалённый
           # внутри одной ветки, остаётся в промежуточных коммитах.
