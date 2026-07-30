@@ -3,7 +3,8 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-07-29  
+**Последнее обновление:** 2026-07-30
+
 **Состояние:** активная разработка
 
 ## Назначение
@@ -288,6 +289,8 @@ Autouse fixture сбрасывает in-memory limiter между тестами
 
 - `test` устанавливает зависимости и запускает pytest с fake credentials;
 - `deploy` зависит от успешного `test`;
+- `deploy` привязан к GitHub Environment `production`, который разрешает
+  deployment только из `main`;
 - только `deploy` получает `id-token: write`;
 - GitHub OIDC обменивается через Workload Identity Federation на временные
   права service account
@@ -307,6 +310,14 @@ Registry и не обновляет GHCR image.
 
 ## Важные решения
 
+- 2026-07-30: репозиторий опубликован. `main` защищён repository ruleset:
+  изменения проходят через PR и проверки `tests`/`secrets`, force-push и
+  удаление запрещены. Approval не требуется, потому что у репозитория один
+  участник. GitHub Secret Scanning, Push Protection и CodeQL default setup
+  включены.
+- 2026-07-30: deploy job привязан к GitHub Environment `production` с branch
+  policy только для `main`. Required reviewer отсутствует, потому что у
+  репозитория один участник; защиту обеспечивают ruleset, test gate и WIF.
 - 2026-07-29: CI отделён от deployment, получает только fake credentials и
   минимальный `contents: read`. История сканируется Gitleaks, а deploy использует
   keyless OIDC/WIF вместо service-account key.
