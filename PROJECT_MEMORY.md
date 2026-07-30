@@ -276,12 +276,13 @@ Autouse fixture сбрасывает in-memory limiter между тестами
 - push в `main` проверяется test job из deploy workflow;
 - PR из ветки того же репозитория уже покрыт push;
 - tests job получает только `test-key` и `test-secret-123`;
-- secrets job запускает Gitleaks по полной истории с `--redact`;
+- secrets job проверяет SHA-256 архива Gitleaks, затем сканирует полную историю
+  с `--redact`;
 - workflow token имеет только `contents: read`;
 - CI ничего не деплоит.
 
-На приватном репозитории встроенный GitHub secret scanning может быть
-недоступен, поэтому Gitleaks — обязательная отдельная защита.
+Gitleaks остаётся отдельной full-history защитой для generic patterns поверх
+включённого GitHub Secret Scanning.
 
 ## Deployment
 
@@ -310,6 +311,9 @@ Registry и не обновляет GHCR image.
 
 ## Важные решения
 
+- 2026-07-30: архив Gitleaks проверяется перед распаковкой по закреплённому
+  SHA-256 официального release asset; скачанный бинарь не запускается при
+  несовпадении checksum.
 - 2026-07-30: все сторонние GitHub Actions в CI и deploy закреплены по полным
   commit SHA. Repository policy разрешает только GitHub-owned Actions и Actions
   от verified creators, а также требует SHA pinning. `GITHUB_TOKEN` по умолчанию
