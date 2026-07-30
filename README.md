@@ -291,13 +291,15 @@ Cloud Run; the Compose file is not the Cloud Run deployment definition.
 ## Deployment
 
 A push to `main` runs tests first. Only a successful test job allows the deploy
-job to:
+job, attached to the `production` GitHub Environment, to:
 
 1. exchange the GitHub OIDC token for a short-lived Google Cloud identity;
 2. build the container;
 3. publish SHA and `latest` tags to Artifact Registry;
 4. deploy the SHA-tagged image to the `insights-api` Cloud Run service in
    `us-central1`.
+
+The Environment accepts deployments only from `main`.
 
 Configure `ANTHROPIC_API_KEY` and `SERVICE_SECRET` in the Cloud Run runtime
 environment. Do not add production values to workflow files or GitHub test

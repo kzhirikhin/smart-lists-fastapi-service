@@ -47,6 +47,8 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    # Environment фиксирует production deployment и разрешает его только из main.
+    environment: production
     permissions:
       contents: read
       id-token: write
