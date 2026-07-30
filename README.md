@@ -1,6 +1,6 @@
 # Smart Lists AI Service
 
-Smart Lists AI Service is the private FastAPI companion to
+Smart Lists AI Service is the FastAPI companion service to
 [Smart Lists](https://github.com/kzhirikhin/smart-lists). It accepts a bounded,
 validated snapshot of a list, asks Anthropic Claude for an insight and returns
 the generated text to the web application.
@@ -48,8 +48,9 @@ status, latency and source IP. Insight logs contain counts and boolean flags,
 not list titles, item names, notes, questions, tokens or secrets. Upstream
 failures are returned to the caller as generic errors.
 
-**Production-safe defaults.** OpenAPI and ReDoc are disabled unless `DEBUG` is
-explicitly enabled. Secrets come from environment variables and `.env` is
+**Production-safe defaults.** Swagger UI and ReDoc are disabled unless `DEBUG`
+is explicitly enabled. The machine-readable OpenAPI schema remains available
+at `/openapi.json`. Secrets come from environment variables and `.env` is
 ignored by Git. Production should always keep `DEBUG=false`.
 
 ### Least privilege and keyless delivery
@@ -280,10 +281,12 @@ docker build -t smart-lists-fastapi-service .
 docker run --rm -p 8000:8000 --env-file .env smart-lists-fastapi-service
 ```
 
-`docker-compose.yml` is an alternate runner for the previously published GHCR
-image and binds the port to loopback. The active production workflow builds the
-repository itself, pushes to Google Artifact Registry and deploys to Cloud Run;
-the Compose file is not the Cloud Run deployment definition.
+`docker-compose.yml` is an alternate runner for a private prebuilt GHCR image,
+binds the port to loopback and requires an authenticated Docker client with
+access to that package. A fresh checkout without registry access should build
+and run the local image with the commands above. The active production workflow
+builds the repository itself, pushes to Google Artifact Registry and deploys to
+Cloud Run; the Compose file is not the Cloud Run deployment definition.
 
 ## Deployment
 
