@@ -311,8 +311,10 @@ Registry и не обновляет GHCR image.
 ## Важные решения
 
 - 2026-07-30: все сторонние GitHub Actions в CI и deploy закреплены по полным
-  commit SHA. Версии `v3`/`v7` сохранены в комментариях для читаемости и
-  обновления Dependabot.
+  commit SHA. Repository policy разрешает только GitHub-owned Actions и Actions
+  от verified creators, а также требует SHA pinning. `GITHUB_TOKEN` по умолчанию
+  имеет только read-доступ и не может одобрять PR. Версии `v3`/`v7` сохранены в
+  комментариях для читаемости и обновления Dependabot.
 - 2026-07-30: репозиторий опубликован. `main` защищён repository ruleset:
   изменения проходят через PR и проверки `tests`/`secrets`, force-push и
   удаление запрещены. Approval не требуется, потому что у репозитория один
