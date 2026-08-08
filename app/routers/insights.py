@@ -23,11 +23,14 @@ async def get_insight(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     completed_count = sum(1 for i in body.items if i.is_completed)
-    item_notes_count = sum(1 for i in body.items if i.note is not None)
+    sub_items_count = sum(len(i.sub_items) for i in body.items)
+    # Заметки считаются по обоим уровням — так же, как их бюджет.
+    item_notes_count = sum(1 for entry in body.iter_entries() if entry.note is not None)
     logger.info(
-        "Insight requested: items=%d completed=%d groups=%d has_user_msg=%s "
-        "has_list_note=%s item_notes=%d omitted_item_notes=%d",
+        "Insight requested: items=%d sub_items=%d completed=%d groups=%d "
+        "has_user_msg=%s has_list_note=%s item_notes=%d omitted_item_notes=%d",
         len(body.items),
+        sub_items_count,
         completed_count,
         len(body.groups),
         body.user_message is not None,

@@ -121,7 +121,11 @@ Example request:
     },
     {
       "name": "Buy a rail pass",
-      "is_completed": true
+      "is_completed": true,
+      "sub_items": [
+        { "name": "Compare regional passes", "is_completed": true },
+        { "name": "Order online", "is_completed": true }
+      ]
     }
   ],
   "groups": ["Travel"],
@@ -162,19 +166,28 @@ Common error responses:
 | Input | Limit |
 | --- | --- |
 | Title | 1–200 characters |
-| Items | Up to 50 |
+| Items | Up to 50 top-level entries |
 | Item name | 1–200 characters |
+| Sub-items | Up to 100 per item and 100 in total |
+| Sub-item name | 1–200 characters |
 | Groups | Up to 20 |
 | Group name | 1–100 characters |
 | User message | Up to 500 characters |
 | List note | Up to 4,000 characters |
 | Note on one item | Up to 4,000 characters |
-| Item notes included | Up to 10 |
-| Combined item-note text | Up to 8,000 characters |
+| Note on one sub-item | Up to 4,000 characters |
+| Item notes included | Up to 10 across both levels |
+| Combined item-note text | Up to 8,000 characters across both levels |
 | Requests | 5 per minute per source IP and process |
 
 Optional text is trimmed, CRLF/CR line endings are normalized to LF and
 whitespace-only values become `null`.
+
+An entry may carry sub-items, nested exactly one level deep. `sub_items` is
+optional and defaults to an empty list, so a caller released before sub-items
+existed keeps working unchanged. A sub-item belongs to its entry: it is never
+sent on its own, and an entry that has sub-items counts as completed only when
+all of them are.
 
 ## How it works
 
