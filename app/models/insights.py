@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Annotated, Optional
 
@@ -5,6 +6,7 @@ from typing import Annotated, Optional
 MAX_NOTE_LENGTH = 4_000
 MAX_ITEM_NOTES = 10
 MAX_ITEM_NOTES_CHARS = 8_000
+MAX_SUB_ITEMS = 100
 
 
 def normalize_optional_text(value: object) -> object:
@@ -15,10 +17,30 @@ def normalize_optional_text(value: object) -> object:
     return value
 
 
+class SubItem(BaseModel):
+    """Подпункт: часть своего пункта, собственных подпунктов иметь не может.
+
+    Отдельная модель, а не рекурсивная ссылка на `ListItem`: вложенность в
+    контракте ровно одна, и выразить это типом надёжнее, чем проверкой глубины.
+    """
+
+    name: str = Field(min_length=1, max_length=200)
+    is_completed: bool
+    note: Optional[str] = Field(default=None, max_length=MAX_NOTE_LENGTH)
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def strip_note(cls, value: object) -> object:
+        return normalize_optional_text(value)
+
+
 class ListItem(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     is_completed: bool
     note: Optional[str] = Field(default=None, max_length=MAX_NOTE_LENGTH)
+    # default_factory, а не обязательное поле: вызывающая сторона могла быть
+    # выпущена до подпунктов, и запрос без этого ключа обязан работать.
+    sub_items: list[SubItem] = Field(default_factory=list, max_length=MAX_SUB_ITEMS)
 
     @field_validator("note", mode="before")
     @classmethod
@@ -45,10 +67,31 @@ class InsightRequest(BaseModel):
     def strip_optional_text(cls, value: object) -> object:
         return normalize_optional_text(value)
 
+    def iter_entries(self) -> Iterator[ListItem | SubItem]:
+        """Записи обоих уровней: пункт, следом его подпункты.
+
+        Бюджеты и счётчики заметок считаются по этому обходу: для модели
+        заметка подпункта ничем не отличается от заметки пункта, и раздельный
+        счёт открыл бы обход лимита через вложенность.
+        """
+        for item in self.items:
+            yield item
+            yield from item.sub_items
+
+    @model_validator(mode="after")
+    def validate_sub_items_budget(self) -> "InsightRequest":
+        """Совокупный лимит подпунктов: поштучный на пункт его не заменяет."""
+        sub_item_count = sum(len(item.sub_items) for item in self.items)
+        if sub_item_count > MAX_SUB_ITEMS:
+            raise ValueError(f"At most {MAX_SUB_ITEMS} sub-items are allowed in total")
+        return self
+
     @model_validator(mode="after")
     def validate_item_notes_budget(self) -> "InsightRequest":
         """Не доверяем только web-клиенту: повторяем AI-бюджеты на границе сервиса."""
-        item_notes = [item.note for item in self.items if item.note is not None]
+        item_notes = [
+            entry.note for entry in self.iter_entries() if entry.note is not None
+        ]
         if len(item_notes) > MAX_ITEM_NOTES:
             raise ValueError(f"At most {MAX_ITEM_NOTES} item notes are allowed")
         if sum(len(note) for note in item_notes) > MAX_ITEM_NOTES_CHARS:
