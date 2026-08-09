@@ -15,10 +15,17 @@ from app.routers.insights import router
 setup_logging()
 logger = logging.getLogger(__name__)
 
+# Все три адреса гасятся одним флагом. Раньше `openapi_url` оставался дефолтным,
+# и `DEBUG=false` убирал только интерфейсы: `/openapi.json` продолжал отдавать
+# схему целиком — путь, обязательный заголовок, все поля и точные лимиты.
+# Схема не секрет и доступа не даёт, но избавляет вызывающего от необходимости
+# что-либо угадывать. Гасить UI, оставляя данные, из которых он строится, —
+# ровно та половинчатость, которую документ называет «закрыто не там, где сломано».
 app = FastAPI(
     title="Smart Lists AI Service",
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
 )
 
 app.state.limiter = limiter
