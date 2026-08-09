@@ -570,3 +570,27 @@ def test_sub_item_cannot_carry_its_own_sub_items():
             {"name": "Подпункт", "status": "pending"}
         ]
         assert "Слишком глубоко" not in json.dumps(payload, ensure_ascii=False)
+
+
+class TestSchemaExposure:
+    """Контракт сервиса не публикуется, пока `DEBUG` выключен.
+
+    Проверяется именно `/openapi.json`, а не только интерфейсы: раньше
+    `DEBUG=false` убирал `/docs` и `/redoc`, но схему оставлял открытой,
+    потому что `openapi_url` был дефолтным. Гасить UI, оставляя данные,
+    из которых он строится, — защита не там, где дыра.
+    """
+
+    def test_openapi_schema_is_not_served_by_default(self):
+        assert client.get("/openapi.json").status_code == 404
+
+    def test_doc_interfaces_are_not_served_by_default(self):
+        assert client.get("/docs").status_code == 404
+        assert client.get("/redoc").status_code == 404
+
+    def test_health_stays_public(self):
+        # Гасим схему, а не liveness: /health остаётся эксплуатационным
+        # контрактом и от DEBUG не зависит.
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
