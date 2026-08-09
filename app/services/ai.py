@@ -1,11 +1,14 @@
 import json
 
 import anthropic
-from app.core.config import settings
+from app.core.anthropic_auth import build_credentials
 from app.models.insights import ListItem, NotesMeta, SubItem
 
+# Явный `credentials=` отключает поиск учётных данных в переменных окружения
+# целиком: SDK не станет читать `ANTHROPIC_API_KEY`, даже если тот окажется
+# выставлен. Забытая переменная не может тихо подменить способ аутентификации.
 client = anthropic.AsyncAnthropic(
-    api_key=settings.anthropic_api_key,
+    credentials=build_credentials(),
     timeout=30.0,
 )
 

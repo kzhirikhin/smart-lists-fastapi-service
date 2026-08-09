@@ -42,9 +42,12 @@ jobs:
       - name: Run tests
         run: pytest
         env:
-          ANTHROPIC_API_KEY: test-key
           EXPECTED_CALLER_SA: test-caller@example.iam.gserviceaccount.com
           SERVICE_AUDIENCE: https://insights-api.example.run.app
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_test
+          ANTHROPIC_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000000
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_test
+          ANTHROPIC_WORKSPACE_ID: wrkspc_test
 
   deploy:
     needs: test
