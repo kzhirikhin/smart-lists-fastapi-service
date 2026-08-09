@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-09 (сверка с моделью угроз)
+**Последнее обновление:** 2026-08-09 (проверка вызывающего по ID-токену)
 
 **Состояние:** активная разработка
 
@@ -18,7 +18,7 @@ web-приложения Smart Lists. Он получает ограниченн
 
 - Smart Lists web-приложение аутентифицирует пользователя, проверяет доступ к
   списку, читает данные из PostgreSQL и применяет суточную квоту;
-- этот сервис аутентифицирует вызывающий backend shared secret, повторно
+- этот сервис аутентифицирует вызывающий backend по Google ID-токену, повторно
   валидирует payload, ограничивает нагрузку, изолирует недоверенный текст в
   prompt и общается с Anthropic;
 - Cloud Run и Google Cloud задают ingress, TLS, IAM и runtime secrets.
@@ -30,6 +30,7 @@ web-приложения Smart Lists. Он получает ограниченн
 - Pydantic `2.12.5` и pydantic-settings `2.14.2`;
 - Anthropic SDK `0.88.0`;
 - SlowAPI `0.1.9`;
+- google-auth `2.56.3` и requests `2.34.2` — проверка Google ID-токенов;
 - pytest `9.0.3`, pytest-asyncio и FastAPI TestClient;
 - Docker, Google Artifact Registry и Google Cloud Run;
 - GitHub Actions, GitHub OIDC и Google Workload Identity Federation.
@@ -42,10 +43,11 @@ web-приложения Smart Lists. Он получает ограниченн
 - `app/main.py` — FastAPI app, middleware размера тела и access log,
   exception handlers, `/health`;
 - `app/core/config.py` — env-backed настройки;
+- `app/core/caller_auth.py` — проверка вызывающего: Google ID-токен либо shared secret;
 - `app/core/limiter.py` — SlowAPI limiter и извлечение source IP;
 - `app/core/logging_config.py` — базовая конфигурация stdout logging;
 - `app/models/insights.py` — request/response contract, нормализация и бюджеты;
-- `app/routers/insights.py` — Bearer authentication, rate limit и orchestration;
+- `app/routers/insights.py` — rate limit, проверка вызывающего и orchestration;
 - `app/services/ai.py` — prompt, сериализация недоверенных данных и Anthropic;
 - `tests/` — API-, validation- и prompt-boundary тесты;
 - `bruno/Smart Lists API/` — ручные запросы health и insight;
@@ -67,8 +69,10 @@ web-приложения Smart Lists. Он получает ограниченн
 ### `POST /insights`
 
 - защищён обязательным `Authorization` header;
-- ожидаемое значение — `Bearer <SERVICE_SECRET>`;
-- сравнение выполняется через `hmac.compare_digest`;
+- принимается либо `Bearer <Google ID-токен>`, либо `Bearer <SERVICE_SECRET>`
+  на время перехода;
+- секрет сравнивается через `hmac.compare_digest`, токен проверяется
+  `google-auth` по подписи, `aud` и `email`;
 - endpoint ограничен декоратором SlowAPI `5/minute`;
 - успешный ответ имеет форму `{"insight": "<text>"}`.
 
@@ -133,10 +137,12 @@ limit: при отсутствии заголовка middleware не измер
 1. Web Server Action `getListInsight` проверяет сессию и доступ к списку через
    БД, выбирает ограниченный набор записей и заметок и атомарно применяет лимит
    15 запросов на пользователя в UTC-день.
-2. Web backend вызывает `${INSIGHTS_SERVICE_URL}/insights`, передавая
-   `Authorization: Bearer ${INSIGHTS_SERVICE_SECRET}`.
-3. FastAPI отклоняет слишком большой объявленный body, а router применяет
-   per-IP rate limit и constant-time проверку secret.
+2. Web backend вызывает `${INSIGHTS_SERVICE_URL}/insights`. В `Authorization`
+   едет Google ID-токен, выпущенный через Workload Identity Federation; на
+   время перехода там же может быть прежний `INSIGHTS_SERVICE_SECRET`.
+3. Cloud Run проверяет право звать по IAM ещё до контейнера. Затем FastAPI
+   отклоняет слишком большой объявленный body, а router применяет per-IP rate
+   limit и проверку вызывающего.
 4. Pydantic нормализует и валидирует поля и совокупный note budget.
 5. `get_insight` определяет требуемую глубину ответа по числу записей обоих
    уровней, пересчитывает проверяемые note counters и строит payload:
@@ -154,13 +160,36 @@ limit: при отсутствии заголовка middleware не измер
 
 ### Аутентификация и авторизация
 
-- Shared Bearer secret аутентифицирует сервис Smart Lists, а не конечного
-  пользователя.
-- Пользовательская сессия, принадлежность списка пространству и права
-  владельца/редактора проверяются в web-репозитории до вызова API.
-- Секрет существует только на серверной стороне обоих приложений.
+Проверяется вызывающий сервис, а не конечный пользователь. Пользовательская
+сессия, принадлежность списка пространству и права владельца/редактора
+проверяются в web-репозитории до вызова API.
+
+Способов два, и это переходное состояние (`app/core/caller_auth.py`):
+
+- **Google ID-токен в `Authorization`** — основной. Cloud Run проверяет его сам
+  до того, как запрос дойдёт до кода, а сервис проверяет повторно и независимо:
+  подпись публичными ключами Google, `aud` и `email` вызывающего против
+  `EXPECTED_CALLER_SA`. Вторая проверка не дублирует первую: если IAM снова
+  окажется распахнутым, платформа не проверит ничего, и подпись останется
+  единственным барьером — а подделать её нельзя.
+- **Shared Bearer secret** — прежний способ, остаётся до перехода web-приложения
+  на токен и удаляется сразу после.
+
+Токен доходит до контейнера целым только из заголовка `Authorization`. У
+`X-Serverless-Authorization` Cloud Run вырезает подпись, заменяя её на
+`SIGNATURE_REMOVED_BY_GOOGLE`: claims читаются, подлинность — нет. Проверено
+экспериментом 2026-08-09, документация об этом прямо не пишет.
+
+`SERVICE_AUDIENCE` принимает список через запятую: у сервиса Cloud Run два
+действующих адреса, и токен выпускается под тот, что настроен у вызывающего.
+
+- Секрет и токен существуют только на серверной стороне обоих приложений.
 - `/health` публичен по назначению; `/insights` без корректного header не
   вызывает Anthropic.
+- Проверка подписи требует публичных ключей Google: библиотека забирает их по
+  сети и кеширует, поэтому первая проверка после холодного старта ходит наружу.
+  Недоступность этого эндпоинта означает отказ в обслуживании, а не пропуск
+  непроверенных запросов.
 
 ### Prompt injection
 
@@ -221,9 +250,16 @@ limit: при отсутствии заголовка middleware не измер
 
 | Переменная | Обязательность | Назначение |
 | --- | --- | --- |
-| `SERVICE_SECRET` | обязательна | shared Bearer secret |
+| `SERVICE_SECRET` | обязательна | shared Bearer secret; удаляется после перехода на ID-токены |
 | `ANTHROPIC_API_KEY` | обязательна | ключ Anthropic |
-| `DEBUG` | необязательна | включает `/docs` и `/redoc`, default `false` |
+| `DEBUG` | необязательна | включает `/docs`, `/redoc` и `/openapi.json`, default `false` |
+| `EXPECTED_CALLER_SA` | необязательна | email service account, которому разрешено звать. Несекретна |
+| `SERVICE_AUDIENCE` | необязательна | допустимые `aud` через запятую — адреса этого сервиса. Несекретна |
+
+Две последние необязательны намеренно: пока они не заданы, проверка токена
+выключена и работает только shared secret. Это делает выкатку независимой от
+порядка появления переменных, а откат — не требующим их убирать. После снятия
+shared secret они станут обязательными.
 
 Settings и глобальный Anthropic client создаются при импорте модулей. Поэтому
 даже тестам нужны placeholder env values до импорта `app.main`; в CI они

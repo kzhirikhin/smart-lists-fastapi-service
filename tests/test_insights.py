@@ -594,3 +594,124 @@ class TestSchemaExposure:
         response = client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
+
+
+class TestCallerIdentity:
+    """Проверка вызывающего по Google ID-токену.
+
+    Подпись здесь не подделывается и не проверяется по-настоящему: библиотека
+    Google замокана. Проверяется логика вокруг неё — что отказ наступает при
+    каждом несовпадении и что без настроенной федерации токен не принимается
+    вовсе. Саму подпись проверяет `google-auth`, дублировать её тестом незачем.
+    """
+
+    SA = "vercel-insights-invoker@example.iam.gserviceaccount.com"
+    AUDIENCE = "https://insights-api.example.run.app"
+
+    @pytest.fixture(autouse=True)
+    def federation_configured(self, mock_settings):
+        mock_settings.expected_caller_sa = self.SA
+        mock_settings.service_audience = self.AUDIENCE
+        return mock_settings
+
+    def call(self, token: str = "header.payload.signature"):
+        return client.post(
+            "/insights",
+            json={
+                "title": "Тест",
+                "items": [{"name": "item1", "is_completed": False}],
+                "user_message": None,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    def test_valid_token_is_accepted(self):
+        with patch(
+            "app.core.caller_auth.google_id_token.verify_oauth2_token",
+            return_value={"email": self.SA, "email_verified": True},
+        ) as verify, patch(
+            "app.services.ai.client.messages.create",
+            new_callable=AsyncMock,
+            return_value=make_mock_response("ok"),
+        ):
+            assert self.call().status_code == 200
+        # Проверка идёт против адреса сервиса: токен, выпущенный для другого
+        # сервиса того же проекта, не должен подходить.
+        assert verify.call_args.kwargs["audience"] == [self.AUDIENCE]
+
+    def test_token_from_another_caller_is_rejected(self):
+        with patch(
+            "app.core.caller_auth.google_id_token.verify_oauth2_token",
+            return_value={"email": "someone-else@example.com", "email_verified": True},
+        ):
+            assert self.call().status_code == 403
+
+    def test_token_without_verified_email_is_rejected(self):
+        SA = self.SA
+        with patch(
+            "app.core.caller_auth.google_id_token.verify_oauth2_token",
+            return_value={"email": SA, "email_verified": False},
+        ):
+            assert self.call().status_code == 403
+
+    def test_invalid_signature_is_rejected(self):
+        # Так выглядит просроченный токен, чужая подпись и подделка целиком.
+        with patch(
+            "app.core.caller_auth.google_id_token.verify_oauth2_token",
+            side_effect=ValueError("Token expired"),
+        ):
+            assert self.call().status_code == 403
+
+    def test_shared_secret_still_works_during_transition(self):
+        with patch(
+            "app.services.ai.client.messages.create",
+            new_callable=AsyncMock,
+            return_value=make_mock_response("ok"),
+        ):
+            assert self.call("test-secret-123").status_code == 200
+
+    def test_token_is_not_accepted_when_federation_is_not_configured(self, mock_settings):
+        mock_settings.expected_caller_sa = None
+        mock_settings.service_audience = None
+        with patch(
+            "app.core.caller_auth.google_id_token.verify_oauth2_token",
+            return_value={"email": self.SA, "email_verified": True},
+        ) as verify:
+            assert self.call().status_code == 403
+        # До проверки подписи дело не доходит: нечем сверять email и audience.
+        verify.assert_not_called()
+
+    def test_non_ascii_header_is_rejected_not_crashed(self):
+        # hmac.compare_digest на не-ASCII строках бросает TypeError. Без
+        # перехвата это был бы 500 на пути до аутентификации, доступный всякому,
+        # кто дотянулся до сервиса.
+        #
+        # Заголовок отправляется байтами: httpx запрещает не-ASCII в str, а вот
+        # Starlette честно декодирует входящие байты как latin-1, поэтому в бою
+        # такая строка до кода доходит. Тест воспроизводит именно этот путь.
+        response = client.post(
+            "/insights",
+            json={
+                "title": "Тест",
+                "items": [{"name": "item1", "is_completed": False}],
+                "user_message": None,
+            },
+            headers={"Authorization": b"Bearer \xff"},
+        )
+        assert response.status_code == 403
+
+
+def test_audience_list_is_split_on_commas(mock_settings):
+    """Несколько адресов сервиса перечисляются через запятую.
+
+    У сервиса Cloud Run бывает два действующих адреса, и токен выпускается под
+    тот, что настроен у вызывающего. Проверка не должна ломаться от того, каким
+    из них назвали один и тот же сервис.
+    """
+    from app.core.caller_auth import _allowed_audiences
+
+    mock_settings.service_audience = " https://a.example , https://b.example ,"
+    assert _allowed_audiences() == ["https://a.example", "https://b.example"]
+
+    mock_settings.service_audience = None
+    assert _allowed_audiences() == []
