@@ -29,11 +29,12 @@ jobs:
 
     # Заведомо нерабочие значения — см. комментарий в deploy.yml.
     env:
-      ANTHROPIC_API_KEY: test-key
-      # Заведомо нерабочие значения: тесты мокают проверку подписи, но
-      # настройки обязательны и сервис без них не поднимется.
       EXPECTED_CALLER_SA: test-caller@example.iam.gserviceaccount.com
       SERVICE_AUDIENCE: https://insights-api.example.run.app
+      ANTHROPIC_FEDERATION_RULE_ID: fdrl_test
+      ANTHROPIC_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000000
+      ANTHROPIC_SERVICE_ACCOUNT_ID: svac_test
+      ANTHROPIC_WORKSPACE_ID: wrkspc_test
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

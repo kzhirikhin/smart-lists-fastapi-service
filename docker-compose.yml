@@ -1,3 +1,7 @@
+# Альтернативный запуск старого GHCR-образа, не описание production.
+# Аутентификация здесь не заработает: входящий токен подписывает Google, а
+# исходящий выдаёт metadata-сервер Google Cloud, которого вне облака нет.
+# Годится для проверки того, что процесс поднимается, — не более.
 services:
   fastapi:
     image: ghcr.io/kiriu237011/smart-lists-fastapi-service:latest
@@ -5,5 +9,9 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - SERVICE_SECRET=${SERVICE_SECRET}
+      - EXPECTED_CALLER_SA=${EXPECTED_CALLER_SA}
+      - SERVICE_AUDIENCE=${SERVICE_AUDIENCE}
+      - ANTHROPIC_FEDERATION_RULE_ID=${ANTHROPIC_FEDERATION_RULE_ID}
+      - ANTHROPIC_ORGANIZATION_ID=${ANTHROPIC_ORGANIZATION_ID}
+      - ANTHROPIC_SERVICE_ACCOUNT_ID=${ANTHROPIC_SERVICE_ACCOUNT_ID}
+      - ANTHROPIC_WORKSPACE_ID=${ANTHROPIC_WORKSPACE_ID}

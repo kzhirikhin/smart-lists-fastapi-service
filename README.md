@@ -19,12 +19,22 @@ keyless deployment pipeline.
 
 ### Defense in depth
 
-**Service authentication.** `POST /insights` requires
-`Authorization: Bearer <SERVICE_SECRET>`. The supplied header and expected value
-are compared with `hmac.compare_digest`, rather than a normal string comparison.
-The shared secret authenticates the calling service; end-user authentication
-and list-level authorization are performed by the Smart Lists web application
+**Service authentication.** `POST /insights` requires a Google-signed ID token
+in `Authorization`. Cloud Run checks the caller's IAM permission before the
+request reaches the container, and the service independently verifies the same
+token again: signature against Google's public keys, `aud` against the
+service's own address, and `email` against the one service account allowed to
+call. The second check is not redundant — if the IAM policy is ever opened up,
+the signature is the only remaining barrier, and a signature cannot be forged.
+
+No shared secret is involved in either direction. End-user authentication and
+list-level authorization are performed by the Smart Lists web application
 before it calls this API.
+
+**Keyless access to Anthropic.** The service holds no Anthropic API key. It
+presents the Google-signed ID token of its own Cloud Run identity and exchanges
+it for a ten-minute access token. A leaked configuration grants nothing: every
+value the service is configured with is a non-secret identifier.
 
 **Bounded work at the API boundary.** Pydantic validates every field before the
 Anthropic request is created. The contract caps list size, string lengths,
@@ -71,10 +81,14 @@ remove it from earlier commits.
 
 ### Trust boundaries and limitations
 
-- Cloud Run ingress, TLS, IAM policy and runtime secret provisioning are
+- Cloud Run ingress, TLS, IAM policy and the service's runtime identity are
   infrastructure concerns and are not defined in this repository.
-- The shared Bearer secret identifies the Smart Lists server, not an individual
-  user. Do not expose it to a browser or mobile client.
+- The caller's ID token identifies the Smart Lists server, not an individual
+  user. It is minted server-side and must never reach a browser or mobile
+  client.
+- Any code running inside the container can reach the metadata server and
+  obtain the service's identity token. The container is the security boundary,
+  not the unprivileged user it runs as.
 - The in-process rate limiter is per application instance, not a global quota.
   The web application separately enforces the authoritative per-user daily
   limit.
@@ -104,7 +118,7 @@ Health checks are intentionally omitted from normal access logs.
 Required header:
 
 ```http
-Authorization: Bearer <SERVICE_SECRET>
+Authorization: Bearer <Google ID token>
 Content-Type: application/json
 ```
 
@@ -193,15 +207,15 @@ all of them are.
 
 1. The Smart Lists Server Action authenticates the user, checks access to the
    list, loads the data from PostgreSQL and applies its per-user daily quota.
-2. It sends the bounded list snapshot to this service with the shared Bearer
-   secret.
-3. FastAPI authenticates the caller, validates the body and applies the
-   per-IP rate limit.
+2. It mints a Google ID token for this service and sends the bounded list
+   snapshot with it.
+3. FastAPI verifies the token, validates the body and applies the per-IP rate
+   limit.
 4. The service recomputes trusted note metadata and serializes all user content
    into an isolated JSON block.
 5. The asynchronous Anthropic client calls
    `claude-haiku-4-5-20251001` with a 30-second timeout and a 2,048-token output
-   cap.
+   cap, refreshing its federated access token when the cached one expires.
 6. The first text block is returned as `{ "insight": "..." }`.
 
 ## Tech stack
@@ -237,13 +251,20 @@ python -m pip install -r requirements.txt
 3. Create `.env` in the repository root:
 
 ```env
-ANTHROPIC_API_KEY=replace-with-a-development-key
-SERVICE_SECRET=replace-with-a-strong-development-secret
+EXPECTED_CALLER_SA=caller@your-project.iam.gserviceaccount.com
+SERVICE_AUDIENCE=https://insights-api.example.run.app
+ANTHROPIC_FEDERATION_RULE_ID=fdrl_replace_me
+ANTHROPIC_ORGANIZATION_ID=00000000-0000-0000-0000-000000000000
+ANTHROPIC_SERVICE_ACCOUNT_ID=svac_replace_me
+ANTHROPIC_WORKSPACE_ID=wrkspc_replace_me
 DEBUG=true
 ```
 
-Use development credentials only. Production values belong in the runtime
-secret configuration, never in the repository or the local `.env`.
+None of these are secrets, and none of them work outside Google Cloud. Both
+directions of authentication need infrastructure the local machine does not
+have: incoming tokens are signed by Google, and outgoing ones come from the
+metadata server. A local instance therefore answers `403`, which is expected —
+verify behaviour with the test suite instead.
 
 4. Start the development server:
 
@@ -259,18 +280,25 @@ With `DEBUG=true`, interactive documentation is available at
 
 ```env
 INSIGHTS_SERVICE_URL=http://localhost:8000
-INSIGHTS_SERVICE_SECRET=the-same-development-secret
 ```
 
-The two variables are server-only and must never use a `NEXT_PUBLIC_` prefix.
+The variable is server-only and must never use a `NEXT_PUBLIC_` prefix. The web
+application mints the ID token itself and needs no shared credential.
 
 ## Environment variables
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | Yes | Server-side Anthropic API credential |
-| `SERVICE_SECRET` | Yes | Shared Bearer secret expected from Smart Lists |
+| `EXPECTED_CALLER_SA` | Yes | Service account email allowed to call this API |
+| `SERVICE_AUDIENCE` | Yes | Comma-separated `aud` values — this service's own addresses |
+| `ANTHROPIC_FEDERATION_RULE_ID` | Yes | `fdrl_*` federation rule |
+| `ANTHROPIC_ORGANIZATION_ID` | Yes | Anthropic organization UUID |
+| `ANTHROPIC_SERVICE_ACCOUNT_ID` | Yes | `svac_*` identity assumed at Anthropic |
+| `ANTHROPIC_WORKSPACE_ID` | Yes | `wrkspc_*` workspace the token is scoped to |
 | `DEBUG` | No | Enables `/docs` and `/redoc`; defaults to `false` |
+
+Every value is a non-secret identifier. The service has no API key and no
+shared secret, so there is nothing here to rotate.
 
 ## Testing
 
@@ -282,8 +310,9 @@ pytest tests/ -v
 
 The tests use placeholder settings and mock Anthropic. They cover the health
 endpoint, service authentication, schema and note-budget limits, optional-text
-normalization, prompt construction and the untrusted-data boundary. No real API
-key or network call is required.
+normalization, prompt construction, the untrusted-data boundary and the
+identity-token request that authenticates the service to Anthropic. No
+credentials and no network access are required.
 
 ## Docker
 
@@ -314,15 +343,19 @@ job, attached to the `production` GitHub Environment, to:
 
 The Environment accepts deployments only from `main`.
 
-Configure `ANTHROPIC_API_KEY` and `SERVICE_SECRET` in the Cloud Run runtime
-environment. Do not add production values to workflow files or GitHub test
-jobs.
+Configure the environment variables listed above in the Cloud Run runtime
+environment. The service runs under a dedicated user-managed service account,
+which the deploy step names explicitly: the Anthropic federation rule is bound
+to that account's `sub` and `email`, so a silent fallback to the project
+default account would break authentication.
 
 ## Project structure
 
 ```text
 app/
   core/
+    anthropic_auth.py     Identity token and Anthropic federation credentials
+    caller_auth.py        Google ID token verification for the caller
     config.py             Environment-backed settings
     limiter.py            Source-IP rate limiter
     logging_config.py     Application logging
