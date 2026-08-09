@@ -1,23 +1,25 @@
 """
 Проверка того, кто нас позвал.
 
-Способов два, и они сосуществуют только на время перехода.
+Вызывающий предъявляет Google ID-токен в заголовке `Authorization`. Cloud Run
+проверяет его сам, до того как запрос дойдёт сюда, — но проверяет право звать,
+а не личность вызывающего с точки зрения приложения. Мы проверяем тот же токен
+повторно и независимо: подпись, `aud` и `email`.
 
-1. **Google ID-токен** в заголовке `Authorization`. Cloud Run проверяет его сам,
-   до того как запрос дойдёт сюда, — но проверяет право звать, а не личность
-   вызывающего с точки зрения приложения. Мы проверяем его повторно и
-   независимо: подпись, `aud` и `email`. Это осмысленно ровно потому, что
-   однажды уже случилось: `run.invoker` был выдан `allUsers`, и тогда платформа
-   не проверяла ничего. При такой ошибке единственным барьером остаётся эта
-   проверка, и подделать её нельзя — подпись выдаёт Google.
+Это не дублирование. `run.invoker` однажды уже был выдан `allUsers`, и в таком
+состоянии платформа не проверяет ничего: заведомо поддельный токен проходил
+насквозь. При повторении такой ошибки эта функция остаётся единственным
+барьером — и, в отличие от прежнего статического секрета, подделать её нельзя,
+подпись выдаёт Google.
 
-   Токен доходит сюда целым только из заголовка `Authorization`. У
-   `X-Serverless-Authorization` Cloud Run вырезает подпись перед передачей в
-   контейнер, заменяя её на `SIGNATURE_REMOVED_BY_GOOGLE`; claims читаются, но
-   проверить их подлинность уже нельзя. Проверено экспериментом 2026-08-09.
+Токен доходит сюда целым только из заголовка `Authorization`. У
+`X-Serverless-Authorization` Cloud Run вырезает подпись перед передачей в
+контейнер, заменяя её на `SIGNATURE_REMOVED_BY_GOOGLE`: claims читаются, но
+проверить их подлинность уже нельзя. Проверено экспериментом 2026-08-09;
+документация об этом прямо не пишет.
 
-2. **Shared secret** — прежний способ. Остаётся, пока вызывающая сторона не
-   переключится на токен, и удаляется сразу после.
+Shared secret удалён 2026-08-09. Ротировать больше нечего: секрета нет ни здесь,
+ни в вызывающем приложении.
 
 Общий принцип: любая ошибка означает отказ. Ни одна ветка не может завершиться
 «ну ладно, пропустим».
@@ -25,7 +27,6 @@
 
 import base64
 import binascii
-import hmac
 import json
 import logging
 from typing import Optional
@@ -86,21 +87,7 @@ def _unverified_audience(token: str) -> Optional[str]:
         return None
 
 
-def _matches_shared_secret(authorization: str) -> bool:
-    """Сравнение за постоянное время, устойчивое к не-ASCII заголовку.
-
-    `hmac.compare_digest` на строках требует ASCII и иначе бросает TypeError.
-    Заголовок приходит от клиента, поэтому не-ASCII там — вопрос времени;
-    без перехвата это был бы необработанный 500 на пути до аутентификации.
-    """
-    expected = f"Bearer {settings.service_secret}"
-    try:
-        return hmac.compare_digest(authorization, expected)
-    except TypeError:
-        return False
-
-
-def _is_valid_google_id_token(authorization: str) -> bool:
+def is_authorized(authorization: str) -> bool:
     """Проверяет подпись, срок, `aud` и то, что вызывающий — ожидаемый SA."""
     audiences = _allowed_audiences()
     if not settings.expected_caller_sa or not audiences:
@@ -140,14 +127,3 @@ def _is_valid_google_id_token(authorization: str) -> bool:
         return False
 
     return True
-
-
-def is_authorized(authorization: str) -> bool:
-    """Пускаем, если сходится shared secret либо валиден Google ID-токен.
-
-    Секрет проверяется первым: сравнение дешёвое и не ходит в сеть, а на время
-    перехода это основной путь.
-    """
-    if _matches_shared_secret(authorization):
-        return True
-    return _is_valid_google_id_token(authorization)

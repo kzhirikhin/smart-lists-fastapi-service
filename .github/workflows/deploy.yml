@@ -42,7 +42,8 @@ jobs:
         run: pytest
         env:
           ANTHROPIC_API_KEY: test-key
-          SERVICE_SECRET: test-secret-123
+          EXPECTED_CALLER_SA: test-caller@example.iam.gserviceaccount.com
+          SERVICE_AUDIENCE: https://insights-api.example.run.app
 
   deploy:
     needs: test

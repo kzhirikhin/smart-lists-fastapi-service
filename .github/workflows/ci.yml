@@ -29,8 +29,11 @@ jobs:
 
     # Заведомо нерабочие значения — см. комментарий в deploy.yml.
     env:
-      SERVICE_SECRET: test-secret-123
       ANTHROPIC_API_KEY: test-key
+      # Заведомо нерабочие значения: тесты мокают проверку подписи, но
+      # настройки обязательны и сервис без них не поднимется.
+      EXPECTED_CALLER_SA: test-caller@example.iam.gserviceaccount.com
+      SERVICE_AUDIENCE: https://insights-api.example.run.app
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
