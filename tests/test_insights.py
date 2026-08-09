@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 from app.main import app
+from tests.conftest import CALLER_SA, SERVICE_AUDIENCE
 
 client = TestClient(app)
 
@@ -71,7 +72,10 @@ def test_insights_success():
         mock_create.assert_called_once()  # убеждаемся что Claude был вызван ровно один раз
 
 
-def test_insights_wrong_secret():
+def test_insights_invalid_token(accept_caller_token):
+    # Так выглядит просроченный токен, чужая подпись и подделка целиком:
+    # google-auth бросает исключение, и запрос отклоняется.
+    accept_caller_token.side_effect = ValueError("Token expired")
     response = client.post(
         "/insights",
         json={
@@ -79,7 +83,7 @@ def test_insights_wrong_secret():
             "items": [{"name": "item1", "is_completed": False}],
             "user_message": None,
         },
-        headers={"Authorization": "Bearer wrong-secret"}
+        headers={"Authorization": "Bearer not-a-real-token"}
     )
 
     assert response.status_code == 403
@@ -597,22 +601,13 @@ class TestSchemaExposure:
 
 
 class TestCallerIdentity:
-    """Проверка вызывающего по Google ID-токену.
+    """Кому разрешено звать сервис.
 
     Подпись здесь не подделывается и не проверяется по-настоящему: библиотека
-    Google замокана. Проверяется логика вокруг неё — что отказ наступает при
-    каждом несовпадении и что без настроенной федерации токен не принимается
-    вовсе. Саму подпись проверяет `google-auth`, дублировать её тестом незачем.
+    Google замокана через фикстуру. Проверяется логика вокруг неё — что отказ
+    наступает при каждом несовпадении. Саму подпись проверяет `google-auth`,
+    дублировать её тестом незачем.
     """
-
-    SA = "vercel-insights-invoker@example.iam.gserviceaccount.com"
-    AUDIENCE = "https://insights-api.example.run.app"
-
-    @pytest.fixture(autouse=True)
-    def federation_configured(self, mock_settings):
-        mock_settings.expected_caller_sa = self.SA
-        mock_settings.service_audience = self.AUDIENCE
-        return mock_settings
 
     def call(self, token: str = "header.payload.signature"):
         return client.post(
@@ -625,11 +620,8 @@ class TestCallerIdentity:
             headers={"Authorization": f"Bearer {token}"},
         )
 
-    def test_valid_token_is_accepted(self):
+    def test_valid_token_is_accepted(self, accept_caller_token):
         with patch(
-            "app.core.caller_auth.google_id_token.verify_oauth2_token",
-            return_value={"email": self.SA, "email_verified": True},
-        ) as verify, patch(
             "app.services.ai.client.messages.create",
             new_callable=AsyncMock,
             return_value=make_mock_response("ok"),
@@ -637,58 +629,23 @@ class TestCallerIdentity:
             assert self.call().status_code == 200
         # Проверка идёт против адреса сервиса: токен, выпущенный для другого
         # сервиса того же проекта, не должен подходить.
-        assert verify.call_args.kwargs["audience"] == [self.AUDIENCE]
+        assert accept_caller_token.call_args.kwargs["audience"] == [SERVICE_AUDIENCE]
 
-    def test_token_from_another_caller_is_rejected(self):
-        with patch(
-            "app.core.caller_auth.google_id_token.verify_oauth2_token",
-            return_value={"email": "someone-else@example.com", "email_verified": True},
-        ):
-            assert self.call().status_code == 403
+    def test_token_from_another_caller_is_rejected(self, accept_caller_token):
+        accept_caller_token.return_value = {
+            "email": "someone-else@example.com",
+            "email_verified": True,
+        }
+        assert self.call().status_code == 403
 
-    def test_token_without_verified_email_is_rejected(self):
-        SA = self.SA
-        with patch(
-            "app.core.caller_auth.google_id_token.verify_oauth2_token",
-            return_value={"email": SA, "email_verified": False},
-        ):
-            assert self.call().status_code == 403
+    def test_token_without_verified_email_is_rejected(self, accept_caller_token):
+        accept_caller_token.return_value = {
+            "email": CALLER_SA,
+            "email_verified": False,
+        }
+        assert self.call().status_code == 403
 
-    def test_invalid_signature_is_rejected(self):
-        # Так выглядит просроченный токен, чужая подпись и подделка целиком.
-        with patch(
-            "app.core.caller_auth.google_id_token.verify_oauth2_token",
-            side_effect=ValueError("Token expired"),
-        ):
-            assert self.call().status_code == 403
-
-    def test_shared_secret_still_works_during_transition(self):
-        with patch(
-            "app.services.ai.client.messages.create",
-            new_callable=AsyncMock,
-            return_value=make_mock_response("ok"),
-        ):
-            assert self.call("test-secret-123").status_code == 200
-
-    def test_token_is_not_accepted_when_federation_is_not_configured(self, mock_settings):
-        mock_settings.expected_caller_sa = None
-        mock_settings.service_audience = None
-        with patch(
-            "app.core.caller_auth.google_id_token.verify_oauth2_token",
-            return_value={"email": self.SA, "email_verified": True},
-        ) as verify:
-            assert self.call().status_code == 403
-        # До проверки подписи дело не доходит: нечем сверять email и audience.
-        verify.assert_not_called()
-
-    def test_non_ascii_header_is_rejected_not_crashed(self):
-        # hmac.compare_digest на не-ASCII строках бросает TypeError. Без
-        # перехвата это был бы 500 на пути до аутентификации, доступный всякому,
-        # кто дотянулся до сервиса.
-        #
-        # Заголовок отправляется байтами: httpx запрещает не-ASCII в str, а вот
-        # Starlette честно декодирует входящие байты как latin-1, поэтому в бою
-        # такая строка до кода доходит. Тест воспроизводит именно этот путь.
+    def test_missing_bearer_prefix_is_rejected(self, accept_caller_token):
         response = client.post(
             "/insights",
             json={
@@ -696,7 +653,42 @@ class TestCallerIdentity:
                 "items": [{"name": "item1", "is_completed": False}],
                 "user_message": None,
             },
-            headers={"Authorization": b"Bearer \xff"},
+            headers={"Authorization": "header.payload.signature"},
+        )
+        assert response.status_code == 403
+        # До проверки подписи дело не доходит: предъявлять нечего.
+        accept_caller_token.assert_not_called()
+
+    def test_former_shared_secret_no_longer_opens_the_door(self, accept_caller_token):
+        # Прежний способ входа. Значение может ещё жить в окружении до его
+        # удаления, но приниматься не должно ничем, кроме подписи Google.
+        accept_caller_token.side_effect = ValueError("Not a JWT")
+        assert self.call("test-secret-123").status_code == 403
+
+    def test_token_is_not_accepted_when_federation_is_not_configured(
+        self, mock_settings, accept_caller_token
+    ):
+        mock_settings.expected_caller_sa = None
+        mock_settings.service_audience = None
+        assert self.call().status_code == 403
+        # До проверки подписи дело не доходит: нечем сверять email и audience.
+        accept_caller_token.assert_not_called()
+
+    def test_non_ascii_header_is_rejected_not_crashed(self, accept_caller_token):
+        # Starlette декодирует входящие заголовки как latin-1, поэтому не-ASCII
+        # байт до кода доходит. Отправляем именно байтами: httpx запрещает
+        # не-ASCII в str. Раньше здесь падал hmac.compare_digest и получался
+        # 500 на пути до аутентификации.
+        accept_caller_token.side_effect = ValueError("Not a JWT")
+        non_ascii_header = ("Bearer " + chr(0xFF)).encode("latin-1")
+        response = client.post(
+            "/insights",
+            json={
+                "title": "Тест",
+                "items": [{"name": "item1", "is_completed": False}],
+                "user_message": None,
+            },
+            headers={"Authorization": non_ascii_header},
         )
         assert response.status_code == 403
 
