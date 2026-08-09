@@ -19,6 +19,7 @@ env:
   REGION: us-central1
   SERVICE: insights-api
   IMAGE: us-central1-docker.pkg.dev/project-5b7c1bd1-572b-410d-826/smart-lists/insights-api
+  RUNTIME_SA: insights-api-runtime@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com
 
 jobs:
   test:
@@ -78,9 +79,14 @@ jobs:
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
 
+      # Личность указана явно, хотя `gcloud run deploy` и сохранил бы текущую.
+      # Умолчание здесь — дефолтный compute service account проекта, общий для
+      # всего проекта: пересоздание сервиса без этой строки тихо вернуло бы
+      # сервис на него, и правило федерации Anthropic перестало бы совпадать.
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE }} \
             --image ${{ env.IMAGE }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
+            --service-account ${{ env.RUNTIME_SA }} \
             --quiet
