@@ -1,9 +1,8 @@
-import hmac
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from app.models.insights import InsightRequest, InsightResponse
-from app.core.config import settings
+from app.core.caller_auth import is_authorized
 from app.core.limiter import limiter
 from app.services import ai
 
@@ -18,8 +17,8 @@ async def get_insight(
     body: InsightRequest,
     authorization: str = Header(...)
 ):
-    expected = f"Bearer {settings.service_secret}"
-    if not hmac.compare_digest(authorization, expected):
+    # Google ID-токен либо shared secret — см. app/core/caller_auth.py.
+    if not is_authorized(authorization):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     completed_count = sum(1 for i in body.items if i.is_completed)
