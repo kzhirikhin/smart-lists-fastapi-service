@@ -36,11 +36,12 @@ presents the Google-signed ID token of its own Cloud Run identity and exchanges
 it for a ten-minute access token. A leaked configuration grants nothing: every
 value the service is configured with is a non-secret identifier.
 
-**Bounded work at the API boundary.** Pydantic validates every field before the
-Anthropic request is created. The contract caps list size, string lengths,
-groups, notes and the combined note budget. Requests are additionally limited
-to five per minute per source IP. A request declaring a body larger than
-100,000 bytes is rejected before normal processing.
+**Bounded work at the API boundary.** Raw ASGI middleware authenticates the
+caller before parsing the body and caps both the declared and actually read
+body at 100,000 bytes, including chunked requests. Pydantic then validates
+every field before the Anthropic request is created. The contract caps list
+size, string lengths, groups, notes and the combined note budget. Requests are
+additionally limited to five per minute per source IP.
 
 **Prompt-injection containment.** User-controlled fields are serialized as
 JSON inside one explicitly marked untrusted-data block. `<`, `>` and `&` are
@@ -95,8 +96,6 @@ remove it from earlier commits.
 - Source-IP detection trusts the first `X-Forwarded-For` value. Run the service
   only behind a controlled proxy such as Cloud Run; direct exposure would let a
   client influence that value.
-- The early 100,000-byte check depends on `Content-Length`. Pydantic field and
-  collection limits remain the authoritative content bounds.
 - `DEBUG=true` exposes `/docs` and `/redoc`; it is for local development only.
 
 ## API
@@ -169,8 +168,8 @@ Common error responses:
 | Status | Meaning |
 | --- | --- |
 | `403` | The supplied service credential is invalid |
-| `413` | Declared request body exceeds 100,000 bytes |
-| `422` | Required header or request data failed validation |
+| `413` | Declared or streamed request body exceeds 100,000 bytes |
+| `422` | Authenticated request data failed validation |
 | `429` | Per-IP rate limit exceeded |
 | `500` | The service could not produce a valid text result |
 | `502` | Anthropic returned an API error |
@@ -209,8 +208,8 @@ all of them are.
    list, loads the data from PostgreSQL and applies its per-user daily quota.
 2. It mints a Google ID token for this service and sends the bounded list
    snapshot with it.
-3. FastAPI verifies the token, validates the body and applies the per-IP rate
-   limit.
+3. FastAPI verifies the token before reading the body, enforces the streaming
+   byte limit, validates the body and applies the per-IP rate limit.
 4. The service recomputes trusted note metadata and serializes all user content
    into an isolated JSON block.
 5. The asynchronous Anthropic client calls
@@ -359,10 +358,11 @@ app/
     config.py             Environment-backed settings
     limiter.py            Source-IP rate limiter
     logging_config.py     Application logging
+    request_boundary.py   Early caller authentication and streaming body cap
   models/
     insights.py           Request, response and validation budgets
   routers/
-    insights.py           Authenticated /insights endpoint
+    insights.py           Rate-limited /insights orchestration
   services/
     ai.py                 Prompt construction and Anthropic call
   main.py                 FastAPI app, middleware and error handlers

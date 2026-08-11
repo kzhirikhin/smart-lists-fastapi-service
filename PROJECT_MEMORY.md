@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-10 (ключ Anthropic заменён федерацией)
+**Последнее обновление:** 2026-08-11 (независимый security-аудит)
 
 **Состояние:** активная разработка
 
@@ -42,8 +42,9 @@ web-приложения Smart Lists. Он получает ограниченн
 
 ## Карта репозитория
 
-- `app/main.py` — FastAPI app, middleware размера тела и access log,
-  exception handlers, `/health`;
+- `app/main.py` — FastAPI app, access log, exception handlers и `/health`;
+- `app/core/request_boundary.py` — ранняя аутентификация `/insights` и
+  streaming-лимит фактически прочитанного body;
 - `app/core/config.py` — env-backed настройки;
 - `app/core/caller_auth.py` — проверка вызывающего по Google ID-токену;
 - `app/core/anthropic_auth.py` — собственный ID-токен из metadata-сервера и
@@ -51,7 +52,7 @@ web-приложения Smart Lists. Он получает ограниченн
 - `app/core/limiter.py` — SlowAPI limiter и извлечение source IP;
 - `app/core/logging_config.py` — базовая конфигурация stdout logging;
 - `app/models/insights.py` — request/response contract, нормализация и бюджеты;
-- `app/routers/insights.py` — rate limit, проверка вызывающего и orchestration;
+- `app/routers/insights.py` — rate limit и orchestration после ранней границы;
 - `app/services/ai.py` — prompt, сериализация недоверенных данных и Anthropic;
 - `tests/` — API-, validation- и prompt-boundary тесты;
 - `bruno/Smart Lists API/` — ручные запросы health и insight;
@@ -105,7 +106,7 @@ web-приложения Smart Lists. Он получает ограниченн
 
 | Поле или ресурс | Лимит |
 | --- | --- |
-| `Content-Length` | не более 100 000 байт |
+| request body | не более 100 000 фактически прочитанных байт |
 | `title` | 1–200 символов |
 | `items` | не более 50 |
 | `items[*].name` | 1–200 символов |
@@ -130,9 +131,10 @@ web-приложения Smart Lists. Он получает ограниченн
 - крайние пробелы удаляются;
 - пустая после нормализации строка превращается в `None`.
 
-Ограничение `Content-Length` — ранняя защита, а не полноценный streaming body
-limit: при отсутствии заголовка middleware не измеряет фактически прочитанные
-байты. Содержательные Pydantic-бюджеты действуют независимо.
+ASGI middleware проверяет и заявленный `Content-Length`, и фактически
+прочитанные чанки. Поэтому отсутствие заголовка или chunked transfer не
+обходит 100 KB. Эта граница работает до JSON parser и Pydantic; содержательные
+Pydantic-бюджеты действуют независимо вторым слоем.
 
 ## Ключевой поток запроса
 
@@ -141,10 +143,11 @@ limit: при отсутствии заголовка middleware не измер
    15 запросов на пользователя в UTC-день.
 2. Web backend вызывает `${INSIGHTS_SERVICE_URL}/insights`. В `Authorization`
    едет Google ID-токен, выпущенный через Workload Identity Federation.
-3. Cloud Run проверяет право звать по IAM ещё до контейнера. Затем FastAPI
-   отклоняет слишком большой объявленный body, а router применяет per-IP rate
-   limit и проверку вызывающего.
-4. Pydantic нормализует и валидирует поля и совокупный note budget.
+3. Cloud Run проверяет право звать по IAM ещё до контейнера. Затем сырой ASGI
+   middleware FastAPI повторно проверяет ID-токен до чтения body и ограничивает
+   объявленный и фактически прочитанный размер.
+4. Pydantic нормализует и валидирует поля и совокупный note budget, после чего
+   router применяет дополнительный per-IP rate limit.
 5. `get_insight` определяет требуемую глубину ответа по числу записей обоих
    уровней, пересчитывает проверяемые note counters и строит payload:
    подпункты уходят вложенным `sub_items` внутри своего пункта, пустой список
@@ -246,7 +249,8 @@ Shared Bearer secret удалён 2026-08-09. Ротировать больше 
   булевы признаки наличия вопроса и заметки списка.
 - Не логируются Bearer header, API key, title, item names, note text,
   `user_message`, полный prompt и успешный AI response.
-- `anthropic.APIStatusError` преобразуется в generic `502`.
+- `anthropic.APIStatusError` преобразуется в generic `502`; в error log идут
+  только status, тип и `request_id`, но не `exc.message` с телом ответа vendor.
 - `ValueError`, включая отсутствие text block, преобразуется в generic `500`.
 - Остальные исключения обрабатываются стандартным механизмом FastAPI.
 
@@ -345,13 +349,16 @@ Bruno collection содержит ручные запросы. Её `secret` —
 pytest tests/ -v
 ```
 
-Сейчас прогон даёт 46 проверок: 42 в `tests/test_insights.py`, включая два
+Сейчас прогон даёт 50 проверок: 46 в `tests/test_insights.py`, включая два
 параметризованных теста бюджетов, и 4 в `tests/test_anthropic_auth.py`.
 Покрыты:
 
 - health;
 - успешный insight с Anthropic mock;
 - неверный и отсутствующий Authorization;
+- отказ без токена до Pydantic даже для malformed body;
+- ранний отказ для большого `Content-Length` и для chunked body без него;
+- отсутствие тела ошибки Anthropic в логах при сохранении `request_id`;
 - границы title, items, item names, question и notes;
 - нормализация whitespace-only optional text;
 - список без записей и список только с общей заметкой;
@@ -416,6 +423,14 @@ Registry и не обновляет GHCR image.
 
 ## Важные решения
 
+- 2026-08-11: независимый аудит подтвердил два дефекта границы `/insights`:
+  проверка токена внутри endpoint происходила после разбора body, а лимит
+  доверял только `Content-Length` и обходился chunked-потоком. Проверки
+  перенесены в сырой ASGI middleware до маршрутизации; он считает реальные
+  байты. Тем же аудитом `exc.message` исключён из Anthropic error log, потому
+  что SDK строит его из полного vendor response. `click` обновлён до 8.3.3:
+  advisory относился к неиспользуемому здесь `click.edit()` и не давал
+  удалённого exploit-path, но уязвимая версия больше не закреплена.
 - 2026-08-10: ключ Anthropic заменён workload identity federation. Прежний
   ключ был предъявительским секретом: он лежал в переменной окружения, попадал
   в каждую ревизию Cloud Run и работал у любого, кто его увидел. Теперь сервис

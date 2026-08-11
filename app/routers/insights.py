@@ -1,8 +1,7 @@
 import logging
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Request
 from app.models.insights import InsightRequest, InsightResponse
-from app.core.caller_auth import is_authorized
 from app.core.limiter import limiter
 from app.services import ai
 
@@ -15,12 +14,7 @@ router = APIRouter()
 async def get_insight(
     request: Request,
     body: InsightRequest,
-    authorization: str = Header(...)
 ):
-    # Google ID-токен либо shared secret — см. app/core/caller_auth.py.
-    if not is_authorized(authorization):
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     completed_count = sum(1 for i in body.items if i.is_completed)
     sub_items_count = sum(len(i.sub_items) for i in body.items)
     # Заметки считаются по обоим уровням — так же, как их бюджет.

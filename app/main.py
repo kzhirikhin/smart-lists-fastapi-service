@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.core.logging_config import setup_logging
+from app.core.request_boundary import InsightsBoundaryMiddleware
 from app.routers.insights import router
 
 setup_logging()
@@ -32,15 +33,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(router)
-
-
-@app.middleware("http")
-async def limit_body_size(request: Request, call_next):
-    content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > 100_000:
-        return JSONResponse(status_code=413, content={"detail": "Request body too large"})
-    return await call_next(request)
-
+app.add_middleware(InsightsBoundaryMiddleware)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -60,7 +53,13 @@ async def log_requests(request: Request, call_next):
 
 @app.exception_handler(anthropic.APIStatusError)
 async def anthropic_error_handler(request: Request, exc: anthropic.APIStatusError):
-    logger.error("Anthropic API error: status=%d %s", exc.status_code, exc.message)
+    # `exc.message` содержит полное тело ответа vendor. Оно не является
+    # доверенным и теоретически может повторить часть prompt, поэтому в лог
+    # идут только безопасные метаданные для корреляции.
+    logger.error(
+        "Anthropic API error: status=%d type=%s request_id=%s",
+        exc.status_code, exc.type, exc.request_id,
+    )
     return JSONResponse(status_code=502, content={"detail": "AI service unavailable"})
 
 
