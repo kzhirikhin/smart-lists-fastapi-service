@@ -1,8 +1,13 @@
+import asyncio
 import json
+import logging
 
+import anthropic
+import httpx
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
+from app.core.request_boundary import InsightsBoundaryMiddleware
 from app.main import app
 from tests.conftest import CALLER_SA, SERVICE_AUDIENCE
 
@@ -100,7 +105,118 @@ def test_insights_missing_auth():
         # заголовок Authorization не передаём вообще
     )
 
-    assert response.status_code == 422  # Pydantic: обязательное поле отсутствует
+    assert response.status_code == 403
+
+
+def test_unauthenticated_request_is_rejected_before_validation(accept_caller_token):
+    response = client.post(
+        "/insights",
+        json={"title": "", "items": "not-a-list"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Forbidden"}
+    # Без Bearer middleware отказывает до сетевой проверки подписи и до
+    # Pydantic; детали схемы наружу не попадают.
+    accept_caller_token.assert_not_called()
+
+
+def test_declared_body_over_limit_is_rejected_before_ai():
+    with patch(
+        "app.services.ai.client.messages.create", new_callable=AsyncMock
+    ) as mock_create:
+        response = client.post(
+            "/insights",
+            content=b"{}",
+            headers={
+                "Authorization": "Bearer test-secret-123",
+                "Content-Type": "application/json",
+                "Content-Length": "100001",
+            },
+        )
+
+    assert response.status_code == 413
+    mock_create.assert_not_called()
+
+
+def test_chunked_body_over_limit_is_rejected_before_ai():
+    messages = [
+        {
+            "type": "http.request",
+            "body": b"x" * 60_000,
+            "more_body": True,
+        },
+        {
+            "type": "http.request",
+            "body": b"x" * 50_001,
+            "more_body": False,
+        },
+    ]
+    sent = []
+    reached_app = False
+
+    async def receive():
+        return messages.pop(0)
+
+    async def send(message):
+        sent.append(message)
+
+    async def consume_body(scope, receive, send):
+        nonlocal reached_app
+        while True:
+            message = await receive()
+            if not message.get("more_body", False):
+                break
+        reached_app = True
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/insights",
+        "headers": [
+            (b"authorization", b"Bearer test-token"),
+            (b"transfer-encoding", b"chunked"),
+        ],
+    }
+
+    asyncio.run(
+        InsightsBoundaryMiddleware(consume_body)(scope, receive, send)
+    )
+
+    response_start = next(
+        message for message in sent if message["type"] == "http.response.start"
+    )
+    assert response_start["status"] == 413
+    assert reached_app is False
+
+
+def test_anthropic_error_log_does_not_include_vendor_body(caplog):
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    vendor_response = httpx.Response(
+        400,
+        request=request,
+        headers={"request-id": "req-safe-correlation"},
+    )
+    error = anthropic.BadRequestError(
+        "private-list-content-must-not-be-logged",
+        response=vendor_response,
+        body={"error": {"type": "invalid_request_error"}},
+    )
+
+    with patch(
+        "app.services.ai.client.messages.create",
+        new_callable=AsyncMock,
+        side_effect=error,
+    ), caplog.at_level(logging.ERROR):
+        response = client.post(
+            "/insights",
+            json={"title": "Тест", "items": []},
+            headers={"Authorization": "Bearer test-secret-123"},
+        )
+
+    assert response.status_code == 502
+    assert "req-safe-correlation" in caplog.text
+    assert "private-list-content-must-not-be-logged" not in caplog.text
 
 
 def test_insights_empty_title():
