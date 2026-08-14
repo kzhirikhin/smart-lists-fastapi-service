@@ -273,6 +273,42 @@ def test_insights_empty_item():
     assert response.status_code == 422
 
 
+def test_anthropic_call_grants_the_model_no_capabilities():
+    """Вызов состоит ровно из модели, лимита вывода, system prompt и сообщения.
+
+    Проверяется набор аргументов целиком, а не отсутствие конкретного из них.
+    Инструменты, MCP-серверы, container и beta-заголовки — единственный способ
+    дать модели что-то помимо текста: без них она не может ни выйти в сеть, ни
+    выполнить код, ни обратиться к metadata-серверу, какой бы injection ни
+    приехала в payload. Появление любого из этих ключей обязано быть
+    осознанным решением, а не побочным следствием правки prompt.
+    """
+    with patch("app.services.ai.client.messages.create", new_callable=AsyncMock) as mock_create:
+        mock_create.return_value = make_mock_response("Инсайт")
+
+        response = client.post(
+            "/insights",
+            json={
+                "title": "Ремонт",
+                "items": [{"name": "Купить плитку", "is_completed": False}],
+                "groups": ["Дом"],
+                "user_message": "С чего начать?",
+            },
+            headers={"Authorization": "Bearer test-secret-123"},
+        )
+
+        assert response.status_code == 200
+        assert set(mock_create.call_args.kwargs) == {
+            "model",
+            "max_tokens",
+            "system",
+            "messages",
+        }
+        # Позиционных аргументов у SDK-вызова быть не должно: они прошли бы
+        # мимо проверки набора ключей выше.
+        assert mock_create.call_args.args == ()
+
+
 def test_insights_user_message_whitespace_only():
     with patch("app.services.ai.client.messages.create", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = make_mock_response("Инсайт без вопроса")
