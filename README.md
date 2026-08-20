@@ -228,7 +228,8 @@ all of them are.
 - Docker, Google Artifact Registry and Google Cloud Run;
 - GitHub Actions with Google Cloud Workload Identity Federation.
 
-Exact package versions are pinned in `requirements.txt`.
+Exact package versions are pinned in `requirements.txt`. Test tooling lives
+in `requirements-dev.txt` and is not installed into the production image.
 
 ## Local setup
 
@@ -244,7 +245,7 @@ On macOS or Linux, activate it with `source venv/bin/activate`.
 2. Install dependencies:
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 3. Create `.env` in the repository root:
