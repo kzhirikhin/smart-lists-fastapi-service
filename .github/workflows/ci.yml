@@ -44,10 +44,11 @@ jobs:
           # Версия должна совпадать с Python в production-образе из Dockerfile.
           python-version: '3.13'
 
-      # Оба файла: production-образ ставит только requirements.txt, а тестам
-      # дополнительно нужен инструментарий из requirements-dev.txt.
+      # requirements-dev.txt — надмножество runtime-набора: он собран из
+      # requirements.in плюс инструментарий тестов. Production-образ ставит
+      # только requirements.txt.
       - name: Install dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        run: pip install --require-hashes -r requirements-dev.txt
 
       - name: Run tests
         run: pytest tests/ -v

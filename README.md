@@ -228,8 +228,11 @@ all of them are.
 - Docker, Google Artifact Registry and Google Cloud Run;
 - GitHub Actions with Google Cloud Workload Identity Federation.
 
-Exact package versions are pinned in `requirements.txt`. Test tooling lives
-in `requirements-dev.txt` and is not installed into the production image.
+Direct dependencies live in `requirements.in` and `requirements-dev.in`.
+`pip-compile` expands them into `requirements.txt` and `requirements-dev.txt`
+with exact versions and a SHA-256 for every artifact; the production image
+installs the runtime file with `--require-hashes`. Test tooling is not
+installed into the image.
 
 ## Local setup
 
@@ -245,7 +248,7 @@ On macOS or Linux, activate it with `source venv/bin/activate`.
 2. Install dependencies:
 
 ```bash
-python -m pip install -r requirements.txt -r requirements-dev.txt
+python -m pip install --require-hashes -r requirements-dev.txt
 ```
 
 3. Create `.env` in the repository root:

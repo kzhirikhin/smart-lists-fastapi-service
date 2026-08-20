@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-20 (аудит контейнеров: образ, зависимости, выкладка)
+**Последнее обновление:** 2026-08-20 (аудит контейнеров; зависимости с хешами)
 
 **Состояние:** активная разработка
 
@@ -37,9 +37,10 @@ web-приложения Smart Lists. Он получает ограниченн
 - Docker, Google Artifact Registry и Google Cloud Run;
 - GitHub Actions, GitHub OIDC и Google Workload Identity Federation.
 
-Точные версии всегда смотри в `requirements.txt`; инструментарий тестов
-вынесен в `requirements-dev.txt` и в production-образ не попадает. Python
-version должна совпадать в `Dockerfile`, `ci.yml` и `deploy.yml`.
+Руками правятся только `requirements.in` и `requirements-dev.in`; полные
+наборы с версиями и SHA-256 каждого артефакта разворачивает pip-compile.
+Инструментарий тестов в production-образ не попадает. Python version должна
+совпадать в `Dockerfile`, `ci.yml` и `deploy.yml`.
 
 ## Карта репозитория
 
@@ -56,9 +57,12 @@ version должна совпадать в `Dockerfile`, `ci.yml` и `deploy.yml
 - `app/routers/insights.py` — rate limit и orchestration после ранней границы;
 - `app/services/ai.py` — prompt, сериализация недоверенных данных и Anthropic;
 - `tests/` — API-, validation- и prompt-boundary тесты;
-- `requirements.txt` — runtime-зависимости, они же содержимое образа;
-- `requirements-dev.txt` — инструментарий тестов, только для CI и локальной
-  разработки;
+- `requirements.in` / `requirements-dev.in` — прямые зависимости, правятся
+  руками;
+- `requirements.txt` — сгенерированный runtime-набор с хешами, он же
+  содержимое образа;
+- `requirements-dev.txt` — сгенерированное надмножество: runtime плюс
+  инструментарий тестов, для CI и локальной разработки;
 - `bruno/Smart Lists API/` — ручные запросы health и insight;
 - `.github/workflows/ci.yml` — тесты и full-history Gitleaks;
 - `.github/workflows/deploy.yml` — test-gated keyless deployment;
@@ -344,7 +348,7 @@ Web-приложение:
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt -r requirements-dev.txt
+python -m pip install --require-hashes -r requirements-dev.txt
 uvicorn app.main:app --reload
 ```
 

@@ -6,7 +6,13 @@ COPY requirements.txt /tmp/requirements.txt
 
 # --prefix собирает установленное в отдельный корень, который вторая стадия
 # копирует одним слоем поверх /usr/local.
-RUN pip install --no-cache-dir --prefix=/install -r /tmp/requirements.txt
+#
+# --require-hashes: закреплённой версии мало. Версия говорит, какой релиз брать,
+# но не что внутри него лежит, — подмена артефакта в уже выпущенной версии
+# закреплением не ловится. Флаг избыточен, пока хеши есть в файле (pip включает
+# проверку сам), и нужен ровно на случай, когда они оттуда исчезнут: тогда
+# сборка упадёт вместо того, чтобы тихо поставить непроверенное.
+RUN pip install --no-cache-dir --require-hashes --prefix=/install -r /tmp/requirements.txt
 
 FROM python:3.13-slim
 
