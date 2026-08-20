@@ -1,0 +1,46 @@
+# Обновления версий. Security-обновления включены отдельно, на уровне
+# репозитория, и этим файлом не управляются — им cooldown не применяется, и это
+# правильно: известная уязвимость должна чиниться сразу.
+#
+# Смысл cooldown. Быстрое обновление снижает риск словить известную
+# уязвимость, но повышает риск принять вредоносный релиз. Риски несимметричны
+# во времени: исправление в версии остаётся навсегда и подождёт неделю без
+# потерь, а скомпрометированный релиз живёт часы. Выдержка почти ничего не
+# стоит в первом случае и снимает большую часть второго.
+#
+# Автомерж не включаем: зелёный CI не ловит закладку.
+version: 2
+
+updates:
+  # Прямые зависимости лежат в requirements.in, полные наборы с хешами
+  # генерирует pip-compile. Dependabot должен править `.in` и пересобирать
+  # `.txt` вместе с хешами — на первом же PR это надо проверить глазами, а не
+  # принимать на веру.
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+
+    cooldown:
+      default-days: 7
+
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
+
+    # Мажоры руками: fastapi, starlette, pydantic и anthropic меняются
+    # согласованно, и `AGENTS.md` требует проверять их совместимость вручную.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  # Скомпрометированный action исполняется в CI с правами workflow, а в deploy
+  # job — рядом с OIDC-токеном. Пины стоят по полному SHA.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
