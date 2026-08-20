@@ -37,7 +37,7 @@ jobs:
       # requirements.in плюс инструментарий тестов. Production-образ ставит
       # только requirements.txt.
       - name: Install dependencies
-        run: pip install --require-hashes -r requirements-dev.txt
+        run: pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
       # Заведомо нерабочие значения. Нужны только чтобы прошла валидация
       # Settings при импорте приложения: до сети тесты не доходят — клиент
