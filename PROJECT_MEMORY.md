@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-20 (multi-stage образ без pip, аудит контейнеров)
+**Последнее обновление:** 2026-08-20 (аудит контейнеров: образ, зависимости, выкладка)
 
 **Состояние:** активная разработка
 
@@ -37,8 +37,9 @@ web-приложения Smart Lists. Он получает ограниченн
 - Docker, Google Artifact Registry и Google Cloud Run;
 - GitHub Actions, GitHub OIDC и Google Workload Identity Federation.
 
-Точные версии всегда смотри в `requirements.txt`. Python version должна
-совпадать в `Dockerfile`, `ci.yml` и `deploy.yml`.
+Точные версии всегда смотри в `requirements.txt`; инструментарий тестов
+вынесен в `requirements-dev.txt` и в production-образ не попадает. Python
+version должна совпадать в `Dockerfile`, `ci.yml` и `deploy.yml`.
 
 ## Карта репозитория
 
@@ -55,6 +56,9 @@ web-приложения Smart Lists. Он получает ограниченн
 - `app/routers/insights.py` — rate limit и orchestration после ранней границы;
 - `app/services/ai.py` — prompt, сериализация недоверенных данных и Anthropic;
 - `tests/` — API-, validation- и prompt-boundary тесты;
+- `requirements.txt` — runtime-зависимости, они же содержимое образа;
+- `requirements-dev.txt` — инструментарий тестов, только для CI и локальной
+  разработки;
 - `bruno/Smart Lists API/` — ручные запросы health и insight;
 - `.github/workflows/ci.yml` — тесты и full-history Gitleaks;
 - `.github/workflows/deploy.yml` — test-gated keyless deployment;
@@ -274,6 +278,11 @@ Shared Bearer secret удалён 2026-08-09. Ротировать больше 
   отдельная сборочная стадия. Уязвимости базового Debian при этом остаются:
   `perl-base` даёт два critical и два high, фиксов у них нет, а сам пакет
   Essential и не удаляется.
+- Grype в `deploy.yml` не блокирует выкладку и не является гейтом. Гейт по
+  severity останавливал бы каждый деплой на неустранимых пакетах базового
+  образа и закономерно оброс бы ignore-правилами. Шаг существует ради дельты:
+  новая строка в логе рядом с выкладкой, которая её принесла. Непрерывного
+  наблюдения он не даёт — CVE, опубликованная после сборки, здесь не видна.
 - `groups` — до 20 строк по 100 символов свободного текста, попадающего в
   prompt. С 2026-08-14 поле заполняется web-приложением; для вызывающего мимо
   приложения оно, как и остальные поля, ограничено только Pydantic.
@@ -335,7 +344,7 @@ Web-приложение:
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 uvicorn app.main:app --reload
 ```
 
@@ -419,8 +428,12 @@ Gitleaks остаётся отдельной full-history защитой для 
   `github-deployer@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com`;
 - image публикуется в
   `us-central1-docker.pkg.dev/project-5b7c1bd1-572b-410d-826/smart-lists/insights-api`;
-- создаются теги commit SHA и `latest`;
-- Cloud Run service `insights-api` в `us-central1` разворачивается по SHA tag.
+- образ помечается тегом commit SHA; мутабельный `latest` больше не
+  публикуется;
+- перед выкладкой образ сканируется grype (`--only-fixed`); шаг намеренно
+  не блокирующий — см. раздел о границах защит;
+- Cloud Run service `insights-api` в `us-central1` разворачивается по digest
+  собранного образа, с явными `--service-account` и `--port 8000`.
 
 Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитория
 настраиваются `EXPECTED_CALLER_SA`, `SERVICE_AUDIENCE` и четыре `ANTHROPIC_*`

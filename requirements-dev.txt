@@ -1,0 +1,8 @@
+# Инструментарий тестов. В production-образ не попадает: Dockerfile ставит
+# только requirements.txt. CI и локальная разработка ставят оба файла.
+colorama==0.4.6
+iniconfig==2.3.0
+pluggy==1.6.0
+Pygments==2.20.0
+pytest==9.0.3
+pytest-asyncio==1.3.0
