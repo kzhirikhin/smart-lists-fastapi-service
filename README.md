@@ -322,12 +322,13 @@ docker build -t smart-lists-fastapi-service .
 docker run --rm -p 8000:8000 --env-file .env smart-lists-fastapi-service
 ```
 
-`docker-compose.yml` is an alternate runner for a private prebuilt GHCR image,
-binds the port to loopback and requires an authenticated Docker client with
-access to that package. A fresh checkout without registry access should build
-and run the local image with the commands above. The active production workflow
-builds the repository itself, pushes to Google Artifact Registry and deploys to
-Cloud Run; the Compose file is not the Cloud Run deployment definition.
+`docker-compose.yml` runs the same local build and binds the port to loopback.
+It used to pull a prebuilt image from a GHCR account that no longer exists —
+a released owner name can be claimed by anyone, so a stale reference like that
+would run a stranger's image on a developer machine. The active production
+workflow builds the repository itself, pushes to Google Artifact Registry and
+deploys to Cloud Run; the Compose file is not the Cloud Run deployment
+definition.
 
 ## Deployment
 

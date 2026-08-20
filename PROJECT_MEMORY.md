@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-14 (web начал заполнять `groups`)
+**Последнее обновление:** 2026-08-20 (локальный compose собирает образ сам)
 
 **Состояние:** активная разработка
 
@@ -59,8 +59,8 @@ web-приложения Smart Lists. Он получает ограниченн
 - `.github/workflows/ci.yml` — тесты и full-history Gitleaks;
 - `.github/workflows/deploy.yml` — test-gated keyless deployment;
 - `Dockerfile` — production image;
-- `docker-compose.yml` — альтернативный запуск старого GHCR `latest` image,
-  не описание Cloud Run deployment.
+- `docker-compose.yml` — локальный запуск со сборкой образа из этого же
+  репозитория, не описание Cloud Run deployment.
 
 ## HTTP-контракт
 
@@ -422,10 +422,12 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
 `insights-api-runtime@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com`,
 и `deploy.yml` передаёт эту личность явно.
 
-`docker-compose.yml` всё ещё ссылается на
-`ghcr.io/kiriu237011/smart-lists-fastapi-service:latest`. Это альтернативный
-или legacy способ запуска; активный production pipeline использует Artifact
-Registry и не обновляет GHCR image.
+`docker-compose.yml` собирает образ локально (`build: .`) и служит только для
+проверки того, что процесс поднимается. Раньше он тянул
+`ghcr.io/kiriu237011/…:latest`, но этого аккаунта на GitHub больше не
+существует: освободившееся имя владельца может занять посторонний и подставить
+произвольный образ на машину разработчика. Активный production pipeline
+использует Artifact Registry и GHCR не трогает.
 
 ## Важные решения
 
