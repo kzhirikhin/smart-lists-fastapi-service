@@ -1,0 +1,10 @@
+# Прямые runtime-зависимости — единственный файл, который правится руками.
+# Всё остальное в requirements.txt разворачивает pip-compile, включая хеши.
+# Команда пересборки — в AGENTS.md, раздел «Зависимости».
+anthropic==0.121.0
+fastapi==0.135.3
+google-auth==2.56.3
+pydantic-settings==2.14.2
+requests==2.34.2
+slowapi==0.1.9
+uvicorn==0.42.0

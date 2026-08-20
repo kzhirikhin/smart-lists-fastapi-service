@@ -122,12 +122,31 @@
 
 ## Зависимости
 
-- Точные версии закреплены в `requirements.txt`. Меняй их намеренно, проверяя
-  совместимость FastAPI, Starlette, Pydantic, httpx и TestClient.
-- Не обновляй `requirements.txt` слепым `pip freeze` из окружения с
-  посторонними пакетами.
+- Руками правятся только `requirements.in` (runtime) и `requirements-dev.in`
+  (инструментарий тестов). `requirements.txt` и `requirements-dev.txt` —
+  сгенерированные: в них полный транзитивный набор с версиями и SHA-256
+  каждого артефакта. Не редактируй их вручную и не обновляй `pip freeze`.
+- Пересобирай их в контейнере, чтобы окружение совпадало с CI и образом:
+
+  ```bash
+  docker run --rm -v "$PWD:/src" -w /src python:3.13-slim sh -c '
+    pip install -q pip-tools
+    pip-compile --generate-hashes --strip-extras --output-file=requirements.txt requirements.in
+    pip-compile --generate-hashes --strip-extras --output-file=requirements-dev.txt requirements-dev.in'
+  ```
+
+- Без `--upgrade` pip-compile сохраняет версии, уже записанные в выходном
+  файле, и меняет только то, что затронуто правкой `.in`. Обновление версий —
+  отдельное намеренное действие через `--upgrade-package <имя>`, с проверкой
+  совместимости FastAPI, Starlette, Pydantic, httpx и TestClient.
+- Хеши — не украшение: `Dockerfile` ставит зависимости с `--require-hashes`,
+  и сборка упадёт, если файл окажется без них. Закреплённая версия говорит,
+  какой релиз брать, но не что внутри него лежит.
+- `requirements-dev.txt` — надмножество runtime-набора, поэтому CI и локальная
+  разработка ставят один этот файл, а production-образ — только
+  `requirements.txt`.
 - После изменения зависимостей создай чистое окружение или контейнер,
-  установи `requirements.txt` и прогони все тесты.
+  установи `requirements-dev.txt` и прогони все тесты.
 - Версия Python в CI и production image должна оставаться одинаковой.
 
 ## Проверка изменений
