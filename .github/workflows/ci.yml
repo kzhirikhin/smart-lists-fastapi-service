@@ -48,7 +48,8 @@ jobs:
       # requirements.in плюс инструментарий тестов. Production-образ ставит
       # только requirements.txt.
       - name: Install dependencies
-        run: pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
+        run: |
+          pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
 
       - name: Run tests
         run: pytest tests/ -v
