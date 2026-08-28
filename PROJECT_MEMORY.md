@@ -3,8 +3,9 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-28 (адрес Anthropic закреплён в коде; разбор
-SSRF-поверхности)
+**Последнее обновление:** 2026-08-28 (аудит цепочки поставок и лицензий:
+проприетарный `LICENSE`, Dependency Review на PR, статические контракты
+`test_supply_chain.py`, ruleset выровнен с web-репозиторием)
 
 **Состояние:** активная разработка
 
@@ -378,8 +379,19 @@ Bruno collection содержит ручные запросы. Её `secret` —
 pytest tests/ -v
 ```
 
-Сейчас прогон даёт 53 проверки: 47 в `tests/test_insights.py`, включая два
-параметризованных теста бюджетов, и 6 в `tests/test_anthropic_auth.py`.
+Сейчас прогон даёт 81 проверку: 47 в `tests/test_insights.py`, включая два
+параметризованных теста бюджетов, 6 в `tests/test_anthropic_auth.py` и 28 в
+`tests/test_supply_chain.py`.
+
+`test_supply_chain.py` — статические контракты цепочки поставок, аналог набора
+`security-static` из web-репозитория. Отдельного gate здесь нет, поэтому они
+живут в обычном прогоне pytest, который уже является required check. Проверяют:
+закрепление всех `uses:` полным SHA с комментарием версии; совпадение прямых
+версий `.in` ↔ `.txt` вместе с сохранностью заголовка pip-compile и хешей;
+наличие `--require-hashes` и `--only-binary=:all:` у каждой установки в
+workflow и в `Dockerfile`. Все три утверждения были истинны и до появления
+тестов — закрепляется не их появление, а то, что они не станут ложными молча.
+
 Покрыты:
 
 - health;
@@ -422,11 +434,27 @@ Autouse fixture сбрасывает in-memory limiter между тестами
 - tests job получает только заведомо нерабочие placeholder-идентификаторы;
 - secrets job проверяет SHA-256 архива Gitleaks, затем сканирует полную историю
   с `--redact`;
+- dependency-review job работает только на `pull_request`, через dependency
+  graph API и без исполнения кода PR: `fail-on-severity: high`, все scopes,
+  `deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0, SSPL-1.0`;
 - workflow token имеет только `contents: read`;
 - CI ничего не деплоит.
 
 Gitleaks остаётся отдельной full-history защитой для generic patterns поверх
 включённого GitHub Secret Scanning.
+
+Dependency Review появился 2026-08-28. До этого SCA-гейта на PR не было вовсе,
+а Dependabot сканирует только ветку по умолчанию — то есть между внесением
+уязвимой зависимости и её выкладкой в Cloud Run не было ни одного сигнала.
+В web-репозитории такой гейт стоял с самого начала, и разница ничем не
+объяснялась.
+
+Ruleset `Protect main` выровнен с web-репозиторием 2026-08-28: PR обязателен,
+`deletion` и `non_fast_forward` запрещены, bypass-акторов нет, контексты
+`tests` и `secrets` привязаны к GitHub Actions через `integration_id`, `strict`
+требует актуальной базы, CodeQL блокирует мерж по порогу errors/high-or-higher.
+`dependency-review` добавляется в required checks только после того, как job
+отчитался хотя бы раз: контекст, который никогда не приходит, блокирует все PR.
 
 ## Deployment
 
