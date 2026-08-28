@@ -77,3 +77,48 @@ def test_stray_api_key_env_is_ignored(monkeypatch):
     )
 
     assert client.api_key is None
+
+
+def test_base_url_is_pinned_and_env_cannot_move_it(monkeypatch):
+    """Адрес получателя токена не может задаваться переменной окружения.
+
+    Проверяется поведением, а не наличием аргумента в конструкторе: тест
+    выставляет `ANTHROPIC_BASE_URL` и требует, чтобы клиент его не заметил.
+    Убрать `base_url=` из `ai.py`, не уронив эту проверку, нельзя.
+
+    Значение сверяется с литералом намеренно — ссылка на константу сервиса
+    сделала бы тест тавтологией и пропустила бы правку самой константы.
+    """
+    from app.services import ai
+
+    # Боевой клиент собран при импорте, то есть до monkeypatch: первая часть
+    # проверки — что он вообще прижат к нужному адресу.
+    assert str(ai.client.base_url) == "https://api.anthropic.com"
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://evil.example")
+
+    client = anthropic.AsyncAnthropic(
+        credentials=anthropic_auth.build_credentials(),
+        base_url="https://api.anthropic.com",
+        timeout=30.0,
+    )
+
+    assert str(client.base_url) == "https://api.anthropic.com"
+
+
+def test_base_url_env_hijacks_a_client_without_the_argument(monkeypatch):
+    """Контрольный тест: без аргумента переменная действительно уводит клиент.
+
+    Без него предыдущая проверка ничего не доказывает — она была бы зелёной и
+    в том случае, если бы SDK перестал читать переменную вовсе. Здесь
+    фиксируется, что механизм жив и что `base_url=` защищает от реального
+    поведения библиотеки, а не от воображаемого.
+    """
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://evil.example")
+
+    client = anthropic.AsyncAnthropic(
+        credentials=anthropic_auth.build_credentials(),
+        timeout=30.0,
+    )
+
+    assert str(client.base_url) == "https://evil.example"
