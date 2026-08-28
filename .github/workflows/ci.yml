@@ -88,3 +88,37 @@ jobs:
       # --redact: найденное значение не печатается в лог.
       - name: Scan history
         run: gitleaks git --redact --verbose .
+
+  # SCA на границе PR. Dependabot сканирует только ветку по умолчанию, то есть
+  # сообщает об уязвимости уже после мержа — а `deploy.yml` выкладывает в Cloud
+  # Run сразу по push в main. Без этого job между внесением уязвимой зависимости
+  # и её появлением в проде нет ни одного сигнала. В основном репозитории такой
+  # gate стоял с самого начала; здесь его не было, и разница ничем не
+  # объяснялась — найдено аудитом 2026-08-28.
+  #
+  # Action работает через dependency graph API и код PR не исполняет, поэтому
+  # безопасен и на PR из форков. Права — только чтение.
+  dependency-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime, development, unknown
+          # Список тот же, что в основном репозитории, и по той же причине.
+          # AGPL-3.0 и SSPL-1.0 применимы уже сегодня: у обеих есть сетевая
+          # оговорка, покрывающая доступ пользователей через сеть. GPL-2.0/3.0
+          # добавлены профилактически — обязательства copyleft срабатывают на
+          # распространении, а сервис только хостится. Сейчас таких зависимостей
+          # в наборе нет, ложных срабатываний не будет.
+          #
+          # LGPL не в списке: сетевой оговорки у неё нет, при хостинге она не
+          # обязывает ни к чему. Разбор — в THREAT_MODEL.md основного
+          # репозитория, там же архитектурный триггер пересмотра.
+          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0, SSPL-1.0
+          comment-summary-in-pr: never
