@@ -1,0 +1,21 @@
+Copyright (c) 2026 Kirill Zhirikhin. All rights reserved.
+
+This source code is published for review and demonstration purposes only —
+so that the author's work can be read and evaluated.
+
+No permission is granted to use, copy, modify, merge, publish, distribute,
+sublicense, or sell this software or any portion of it, whether in source or
+binary form, except as required to view and fork the repository through the
+features GitHub itself provides.
+
+This notice does not apply to the third-party dependencies listed in
+requirements.in, requirements.txt, requirements-dev.in and
+requirements-dev.txt. Those remain under their own licenses, held by their
+respective authors.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
