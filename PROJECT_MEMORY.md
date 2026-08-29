@@ -3,9 +3,9 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-28 (аудит цепочки поставок и лицензий:
-проприетарный `LICENSE`, Dependency Review на PR, статические контракты
-`test_supply_chain.py`, ruleset выровнен с web-репозиторием)
+**Последнее обновление:** 2026-08-29 (периодический fail-closed Grype по
+работающим Cloud Run digest, отдельная read-only GCP identity и статические
+контракты workflow)
 
 **Состояние:** активная разработка
 
@@ -37,7 +37,8 @@ web-приложения Smart Lists. Он получает ограниченн
   ID-токенов и запрос собственного токена у metadata-сервера;
 - pytest `9.0.3`, pytest-asyncio и FastAPI TestClient;
 - Docker, Google Artifact Registry и Google Cloud Run;
-- GitHub Actions, GitHub OIDC и Google Workload Identity Federation.
+- GitHub Actions, GitHub OIDC и Google Workload Identity Federation;
+- Grype `0.117.0` для deploy-time и еженедельного image scanning.
 
 Руками правятся только `requirements.in` и `requirements-dev.in`; полные
 наборы с версиями и SHA-256 каждого артефакта разворачивает pip-compile.
@@ -68,6 +69,8 @@ web-приложения Smart Lists. Он получает ограниченн
 - `bruno/Smart Lists API/` — ручные запросы health и insight;
 - `.github/workflows/ci.yml` — тесты и full-history Gitleaks;
 - `.github/workflows/deploy.yml` — test-gated keyless deployment;
+- `.github/workflows/image-scan.yml` — еженедельный и ручной fail-closed scan
+  фактически обслуживающих Cloud Run digest;
 - `Dockerfile` — production image: multi-stage, в runtime только `app/` и
   установленные пакеты, без pip и без файлов репозитория;
 - `docker-compose.yml` — локальный запуск со сборкой образа из этого же
@@ -290,11 +293,12 @@ Shared Bearer secret удалён 2026-08-09. Ротировать больше 
   отдельная сборочная стадия. Уязвимости базового Debian при этом остаются:
   `perl-base` даёт два critical и два high, фиксов у них нет, а сам пакет
   Essential и не удаляется.
-- Grype в `deploy.yml` не блокирует выкладку и не является гейтом. Гейт по
-  severity останавливал бы каждый деплой на неустранимых пакетах базового
-  образа и закономерно оброс бы ignore-правилами. Шаг существует ради дельты:
-  новая строка в логе рядом с выкладкой, которая её принесла. Непрерывного
-  наблюдения он не даёт — CVE, опубликованная после сборки, здесь не видна.
+- Grype в `deploy.yml` остаётся неблокирующей дельтой момента сборки и использует
+  `--only-fixed`. Независимый `image-scan.yml` раз в неделю и вручную берёт из
+  Cloud Run все revisions с трафиком или tag, разрешает их только в ожидаемые
+  `${IMAGE}@sha256:<digest>` и сканирует без `--only-fixed`. High/Critical,
+  неактуальная база CVE, пустой список целей и любая техническая ошибка делают
+  job красной. JSON-отчёты сохраняются на 30 дней.
 - `groups` — до 20 строк по 100 символов свободного текста, попадающего в
   prompt. С 2026-08-14 поле заполняется web-приложением; для вызывающего мимо
   приложения оно, как и остальные поля, ограничено только Pydantic.
@@ -476,6 +480,15 @@ Ruleset `Protect main` выровнен с web-репозиторием 2026-08-
   не блокирующий — см. раздел о границах защит;
 - Cloud Run service `insights-api` в `us-central1` разворачивается по digest
   собранного образа, с явными `--service-account` и `--port 8000`.
+
+`.github/workflows/image-scan.yml` использует отдельную keyless identity
+`github-image-scanner@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com`.
+WIF разрешён только repository ID `1199475908` из `main`; у identity есть
+project-level `roles/run.viewer` и repository-level
+`roles/artifactregistry.reader` только на `smart-lists`. Прав deploy/write,
+доступа к runtime-SA, БД и пользовательским данным нет. `github-deployer`
+может назначать только `insights-api-runtime`: лишний `serviceAccountUser` на
+неиспользуемый Default Compute SA удалён 2026-08-29.
 
 Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитория
 настраиваются `EXPECTED_CALLER_SA`, `SERVICE_AUDIENCE` и четыре `ANTHROPIC_*`
