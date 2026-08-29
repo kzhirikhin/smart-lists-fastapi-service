@@ -17,6 +17,7 @@ concurrency:
 env:
   PROJECT_ID: project-5b7c1bd1-572b-410d-826
   REGION: us-central1
+  REPOSITORY: smart-lists
   SERVICE: insights-api
   IMAGE: us-central1-docker.pkg.dev/project-5b7c1bd1-572b-410d-826/smart-lists/insights-api
   RUNTIME_SA: insights-api-runtime@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com
@@ -87,6 +88,100 @@ jobs:
           context: .
           push: true
           tags: ${{ env.IMAGE }}:${{ github.sha }}
+
+      # SBOM строится по immutable digest уже опубликованного образа, а не по
+      # рабочей директории или тегу. Поэтому опись включает и Python-пакеты, и
+      # системные пакеты финального Debian-слоя — ровно те байты, которые могут
+      # уехать в Cloud Run. Ошибка генерации, проверки или attachment останавливает
+      # deploy: образ без связанной с ним описи не считается готовым артефактом.
+      #
+      # Имя attachment детерминировано digest. Повторный запуск того же build не
+      # плодит копии; существующая запись принимается только с ожидаемыми target
+      # и media type. Отдельного архива нет: cleanup удалит attachment вместе с
+      # target image, что является принятым сроком хранения для этого проекта.
+      - name: Generate and attach CycloneDX SBOM
+        env:
+          SYFT_VERSION: 1.51.0
+          # SHA-256 из официального syft_1.51.0_checksums.txt.
+          SYFT_SHA256: 2a2e837a2c8d59ec9af5472ee22d3b04ee463c4e44476ecf993fd1e5ab6ebc7f
+          DIGEST: ${{ steps.build.outputs.digest }}
+          ATTACHMENT_TYPE: application/vnd.cyclonedx+json
+        run: |
+          [[ "${DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Build returned an invalid digest: ${DIGEST}" >&2
+            exit 1
+          }
+
+          archive="${RUNNER_TEMP}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
+            -o "${archive}"
+          echo "${SYFT_SHA256}  ${archive}" | sha256sum -c -
+          sudo tar -xzf "${archive}" -C /usr/local/bin syft
+
+          digest_hex="${DIGEST#sha256:}"
+          sbom="${RUNNER_TEMP}/insights-api-${digest_hex}.cdx.json"
+          syft "${IMAGE}@${DIGEST}" -o "cyclonedx-json@1.6=${sbom}"
+
+          jq -e \
+            --arg digest "${DIGEST}" \
+            --arg syft_version "${SYFT_VERSION}" \
+            '
+              .bomFormat == "CycloneDX" and
+              .specVersion == "1.6" and
+              .metadata.component.type == "container" and
+              .metadata.component.version == $digest and
+              any(.metadata.tools.components[]?;
+                .name == "syft" and .version == $syft_version) and
+              ((.components | type) == "array") and
+              ((.components | length) > 0)
+            ' "${sbom}" >/dev/null
+
+          image_name="${IMAGE##*/}"
+          target="$(
+            gcloud artifacts versions describe "${DIGEST}" \
+              --project "${PROJECT_ID}" \
+              --location "${REGION}" \
+              --repository "${REPOSITORY}" \
+              --package "${image_name}" \
+              --format='value(name)'
+          )"
+          expected_target="projects/${PROJECT_ID}/locations/${REGION}/repositories/${REPOSITORY}/packages/${image_name}/versions/${DIGEST}"
+          [[ "${target}" == "${expected_target}" ]] || {
+            echo "Artifact Registry returned an unexpected target: ${target}" >&2
+            exit 1
+          }
+
+          attachment_id="cyclonedx-${digest_hex:0:48}"
+          attachment="${RUNNER_TEMP}/attachment.json"
+          if gcloud artifacts attachments describe "${attachment_id}" \
+            --project "${PROJECT_ID}" \
+            --location "${REGION}" \
+            --repository "${REPOSITORY}" \
+            --format=json >"${attachment}" 2>/dev/null; then
+            echo "Attachment ${attachment_id} already exists; validating it."
+          else
+            gcloud artifacts attachments create "${attachment_id}" \
+              --project "${PROJECT_ID}" \
+              --location "${REGION}" \
+              --repository "${REPOSITORY}" \
+              --target "${target}" \
+              --attachment-type "${ATTACHMENT_TYPE}" \
+              --attachment-namespace "anchore.com/syft" \
+              --files "${sbom}" \
+              --format=json >"${attachment}"
+          fi
+
+          jq -e \
+            --arg target "${target}" \
+            --arg type "${ATTACHMENT_TYPE}" \
+            '
+              .target == $target and
+              .type == $type and
+              .attachmentNamespace == "anchore.com/syft" and
+              ((.files | type) == "array") and
+              ((.files | length) == 1)
+            ' "${attachment}" >/dev/null
 
       # Сканер намеренно не блокирует выкладку. На 2026-08-20 в образе два
       # critical и два high, и все четыре — `perl-base` базового Debian со

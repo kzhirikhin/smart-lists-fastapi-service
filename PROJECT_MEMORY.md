@@ -3,9 +3,8 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-29 (периодический fail-closed Grype по
-работающим Cloud Run digest, отдельная read-only GCP identity и статические
-контракты workflow)
+**Последнее обновление:** 2026-08-29 (CycloneDX 1.6 SBOM по image digest и
+Artifact Registry attachment перед каждым deploy)
 
 **Состояние:** активная разработка
 
@@ -478,6 +477,13 @@ Ruleset `Protect main` выровнен с web-репозиторием 2026-08-
   `us-central1-docker.pkg.dev/project-5b7c1bd1-572b-410d-826/smart-lists/insights-api`;
 - образ помечается тегом commit SHA; мутабельный `latest` больше не
   публикуется;
+- после push Syft 1.51.0 строит CycloneDX JSON 1.6 по `${IMAGE}@${digest}`;
+  workflow проверяет формат, непустой состав, версию Syft и совпадение
+  `metadata.component.version` с digest, затем прикрепляет файл к этой версии
+  образа в Artifact Registry;
+- SBOM attachment блокирует deploy при технической ошибке и создаётся
+  идемпотентно с media type `application/vnd.cyclonedx+json`. Отдельного архива
+  нет: cleanup образа удаляет и attachment;
 - перед выкладкой образ сканируется grype (`--only-fixed`); шаг намеренно
   не блокирующий — см. раздел о границах защит;
 - Cloud Run service `insights-api` в `us-central1` разворачивается по digest
@@ -491,6 +497,8 @@ project-level `roles/run.viewer` и repository-level
 доступа к runtime-SA, БД и пользовательским данным нет. `github-deployer`
 может назначать только `insights-api-runtime`: лишний `serviceAccountUser` на
 неиспользуемый Default Compute SA удалён 2026-08-29.
+Новой identity для SBOM нет: `github-deployer` уже имел repository write для
+push образа, а эта роль включает создание и чтение attachments.
 
 Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитория
 настраиваются `EXPECTED_CALLER_SA`, `SERVICE_AUDIENCE` и четыре `ANTHROPIC_*`
@@ -507,6 +515,12 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
 
 ## Важные решения
 
+- 2026-08-29: SBOM создаётся из уже опубликованного immutable image digest, а
+  не из checkout или requirements-файла, поэтому включает финальный Debian-слой.
+  Формат — CycloneDX JSON 1.6, инструмент — Syft с закреплёнными версией и
+  checksum. Attachment живёт столько же, сколько target image; отдельная
+  история удалённых образов сознательно не хранится. SBOM не подписан и не
+  доказывает происхождение сборки: provenance остаётся отдельной задачей.
 - 2026-08-11: независимый аудит подтвердил два дефекта границы `/insights`:
   проверка токена внутри endpoint происходила после разбора body, а лимит
   доверял только `Content-Length` и обходился chunked-потоком. Проверки

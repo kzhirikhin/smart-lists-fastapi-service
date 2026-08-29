@@ -181,6 +181,66 @@ class TestInstallFlags:
         assert len(re.findall(r"^\s*pip install", joined, re.MULTILINE)) >= 2
 
 
+class TestCycloneDxSbom:
+    """Каждый deploy получает проверяемую опись ровно своего image digest.
+
+    Attachment API — внешнее состояние GCP, поэтому pytest не доказывает, что
+    сервис доступен. Он фиксирует более важные регрессии в нашей стороне
+    контракта: tag/директория не заменяют digest, файл не принимается только за
+    расширение, а ошибка публикации не превращается в информационный лог.
+    """
+
+    @pytest.fixture
+    def workflow(self) -> str:
+        return (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
+
+    @pytest.fixture
+    def step(self, workflow: str) -> str:
+        marker = "- name: Generate and attach CycloneDX SBOM"
+        assert marker in workflow
+        return workflow.split(marker, 1)[1].split("\n      - name:", 1)[0]
+
+    def test_runs_after_build_and_before_deploy(self, workflow: str) -> None:
+        build = workflow.index("- name: Build and push image")
+        sbom = workflow.index("- name: Generate and attach CycloneDX SBOM")
+        deploy = workflow.index("- name: Deploy to Cloud Run")
+        assert build < sbom < deploy
+
+    def test_syft_binary_is_versioned_and_checksum_verified(self, step: str) -> None:
+        assert re.search(r"SYFT_VERSION:\s*\d+\.\d+\.\d+", step)
+        assert re.search(r"SYFT_SHA256:\s*[0-9a-f]{64}", step)
+        assert "sha256sum -c -" in step
+        assert "syft_${SYFT_VERSION}_linux_amd64.tar.gz" in step
+
+    def test_scans_exact_digest_as_cyclonedx_16(self, step: str) -> None:
+        assert '[[ "${DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]' in step
+        assert 'syft "${IMAGE}@${DIGEST}"' in step
+        assert '-o "cyclonedx-json@1.6=${sbom}"' in step
+        assert '.bomFormat == "CycloneDX"' in step
+        assert '.specVersion == "1.6"' in step
+        assert '.metadata.component.type == "container"' in step
+        assert '.metadata.component.version == $digest' in step
+        assert "((.components | length) > 0)" in step
+
+    def test_attachment_targets_registry_version_by_digest(self, step: str) -> None:
+        assert 'gcloud artifacts versions describe "${DIGEST}"' in step
+        assert 'expected_target="projects/${PROJECT_ID}/locations/${REGION}' in step
+        assert '/versions/${DIGEST}"' in step
+        assert '[[ "${target}" == "${expected_target}" ]]' in step
+        assert 'attachment_id="cyclonedx-${digest_hex:0:48}"' in step
+
+    def test_attachment_is_idempotent_and_fail_closed(self, step: str) -> None:
+        assert "gcloud artifacts attachments describe" in step
+        assert "gcloud artifacts attachments create" in step
+        assert '--attachment-type "${ATTACHMENT_TYPE}"' in step
+        assert '--attachment-namespace "anchore.com/syft"' in step
+        assert '--files "${sbom}"' in step
+        assert ".target == $target" in step
+        assert ".type == $type" in step
+        assert "continue-on-error" not in step
+        assert "actions/upload-artifact" not in step
+
+
 class TestRecurringImageScan:
     """Периодическая проверка смотрит на работающий immutable-артефакт.
 
