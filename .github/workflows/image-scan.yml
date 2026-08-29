@@ -38,6 +38,15 @@ jobs:
       id-token: write
 
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+
       - name: Authenticate to GCP
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
@@ -119,31 +128,49 @@ jobs:
           echo "reports_dir=${reports_dir}" >> "${GITHUB_OUTPUT}"
 
       # Проверяем все обслуживающие digest, даже если первый уже уязвим.
-      # Любая high/critical находка и любая техническая ошибка делают job
-      # красной; `--only-fixed` здесь намеренно отсутствует.
+      # Grype без `--fail-on` отличает техническую ошибку от результата, а
+      # отдельный policy evaluator применяет только exact VEX/waiver и решает
+      # high/critical gate. Техническую ошибку политика подавить не может.
       - name: Scan every serving digest
         run: |
           set -euo pipefail
           failed=0
           while IFS= read -r image_ref; do
             digest="${image_ref##*@}"
-            report="${{ steps.targets.outputs.reports_dir }}/grype-${digest#sha256:}.json"
+            report_prefix="${{ steps.targets.outputs.reports_dir }}/grype-${digest#sha256:}"
+            raw_report="${report_prefix}-raw.json"
+            policy_report="${report_prefix}-policy.json"
+            policy_summary="${report_prefix}-summary.md"
 
             set +e
-            grype "${image_ref}" --fail-on high -o json > "${report}"
+            grype "${image_ref}" -o json --file "${raw_report}"
             scan_code=$?
             set -e
 
-            if jq -e . "${report}" > /dev/null 2>&1; then
-              critical="$(jq '[.matches[]? | select(.vulnerability.severity == "Critical")] | length' "${report}")"
-              high="$(jq '[.matches[]? | select(.vulnerability.severity == "High")] | length' "${report}")"
-              printf -- '- `%s`: critical=%s, high=%s\n' "${digest}" "${critical}" "${high}" >> "${GITHUB_STEP_SUMMARY}"
-            else
-              printf -- '- `%s`: Grype не сформировал корректный JSON-отчёт\n' "${digest}" >> "${GITHUB_STEP_SUMMARY}"
+            if (( scan_code != 0 )); then
+              echo "::error::Техническая ошибка Grype ${scan_code} для ${digest}"
+              printf -- '### Image scan policy — %s\n\n- Gate: **ERROR**\n- Grype завершился с кодом %s\n' \
+                "${digest}" "${scan_code}" >> "${GITHUB_STEP_SUMMARY}"
+              failed=1
+              continue
             fi
 
-            if (( scan_code != 0 )); then
-              echo "::error::Grype завершился с кодом ${scan_code} для ${digest}"
+            set +e
+            python scripts/evaluate_image_scan.py \
+              --report "${raw_report}" \
+              --image-digest "${digest}" \
+              --vex-dir security/vex \
+              --waivers security/waivers.json \
+              --output "${policy_report}" \
+              --summary "${policy_summary}"
+            policy_code=$?
+            set -e
+
+            if [[ -f "${policy_summary}" ]]; then
+              cat "${policy_summary}" >> "${GITHUB_STEP_SUMMARY}"
+            fi
+            if (( policy_code != 0 )); then
+              echo "::error::Image policy заблокировала ${digest}, код ${policy_code}"
               failed=1
             fi
           done < "${{ steps.targets.outputs.targets_file }}"

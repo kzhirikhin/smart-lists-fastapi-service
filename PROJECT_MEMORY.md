@@ -3,8 +3,8 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-29 (CycloneDX 1.6 SBOM по image digest и
-Artifact Registry attachment перед каждым deploy)
+**Последнее обновление:** 2026-08-29 (CycloneDX VEX и отдельный временный
+waiver для recurring image gate)
 
 **Состояние:** активная разработка
 
@@ -297,9 +297,11 @@ Shared Bearer secret удалён 2026-08-09. Ротировать больше 
 - Grype в `deploy.yml` остаётся неблокирующей дельтой момента сборки и использует
   `--only-fixed`. Независимый `image-scan.yml` раз в неделю и вручную берёт из
   Cloud Run все revisions с трафиком или tag, разрешает их только в ожидаемые
-  `${IMAGE}@sha256:<digest>` и сканирует без `--only-fixed`. High/Critical,
-  неактуальная база CVE, пустой список целей и любая техническая ошибка делают
-  job красной. JSON-отчёты сохраняются на 30 дней.
+  `${IMAGE}@sha256:<digest>` и сканирует без `--only-fixed`. Сырой JSON передаёт
+  `scripts/evaluate_image_scan.py`: High/Critical остаются блокирующими, кроме
+  exact CycloneDX VEX `not_affected` или действующего временного waiver.
+  Неактуальная база CVE, пустой список целей, повреждённая политика и любая
+  техническая ошибка делают job красной. Raw и policy JSON сохраняются 30 дней.
 - `groups` — до 20 строк по 100 символов свободного текста, попадающего в
   prompt. С 2026-08-14 поле заполняется web-приложением; для вызывающего мимо
   приложения оно, как и остальные поля, ограничено только Pydantic.
@@ -384,9 +386,9 @@ Bruno collection содержит ручные запросы. Её `secret` —
 pytest tests/ -v
 ```
 
-Сейчас прогон даёт 81 проверку: 47 в `tests/test_insights.py`, включая два
-параметризованных теста бюджетов, 6 в `tests/test_anthropic_auth.py` и 28 в
-`tests/test_supply_chain.py`.
+Сейчас прогон даёт 116 проверок: 47 в `tests/test_insights.py`, включая два
+параметризованных теста бюджетов, 6 в `tests/test_anthropic_auth.py`, 13 в
+`tests/test_scan_policy.py` и 50 в `tests/test_supply_chain.py`.
 
 `test_supply_chain.py` — статические контракты цепочки поставок, аналог набора
 `security-static` из web-репозитория. Отдельного gate здесь нет, поэтому они
@@ -394,8 +396,10 @@ pytest tests/ -v
 закрепление всех `uses:` полным SHA с комментарием версии; совпадение прямых
 версий `.in` ↔ `.txt` вместе с сохранностью заголовка pip-compile и хешей;
 наличие `--require-hashes` и `--only-binary=:all:` у каждой установки в
-workflow и в `Dockerfile`. Все три утверждения были истинны и до появления
-тестов — закрепляется не их появление, а то, что они не станут ложными молча.
+workflow и в `Dockerfile`; recurring scan дополнительно фиксирует вызов exact
+policy evaluator и раздельное сохранение raw/policy отчётов. Базовые
+утверждения были истинны и до появления тестов — закрепляется не их появление,
+а то, что они не станут ложными молча.
 
 Покрыты:
 
@@ -425,6 +429,10 @@ workflow и в `Dockerfile`. Все три утверждения были ис�
 - адрес Anthropic не задаётся окружением: выставленная `ANTHROPIC_BASE_URL` не
   двигает клиент, и отдельный контрольный тест на клиенте без `base_url=`
   фиксирует, что механизм подмены в SDK жив, а не отмер.
+- VEX подавляет только точное CycloneDX `not_affected` с evidence/review;
+  остальные states, blanket package, отсутствие evidence и пересечение с
+  waiver отвергаются; активный waiver работает, истёкший — уже нет, а срок
+  больше 30 дней запрещён.
 
 Autouse fixture сбрасывает in-memory limiter между тестами. Production
 декоратор при этом остаётся активным. Сеть и настоящий Anthropic API в тестах
@@ -504,6 +512,15 @@ project-level `roles/run.viewer` и repository-level
 Новой identity для SBOM нет: `github-deployer` уже имел repository write для
 push образа, а эта роль включает создание и чтение attachments.
 
+Репозиторная политика исключений не требует внешнего сервиса и новых прав.
+`security/vex/<digest>.cdx.json` содержит CycloneDX 1.6 только для доказанного
+`not_affected`: exact CVE, package name/version/purl и image digest, evidence и
+review PR. `security/waivers.json` отдельно описывает принятый реальный риск:
+owner/approver, reason, remediation plan, evidence и срок максимум 30 дней.
+Истёкшая запись, любой другой VEX state и wildcard не подавляют. Сейчас оба
+набора пусты. Локальная контрольная проверка текущего production digest
+`sha256:387964…4dd0` дала 7 Critical + 20 High, VEX=0, waiver=0 и красный gate.
+
 Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитория
 настраиваются `EXPECTED_CALLER_SA`, `SERVICE_AUDIENCE` и четыре `ANTHROPIC_*`
 идентификатора — все несекретные. Сервис выполняется под
@@ -519,6 +536,12 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
 
 ## Важные решения
 
+- 2026-08-29: VEX не используется как эвфемизм для принятого риска. Только
+  доказанный `not_affected` живёт в CycloneDX; реальная временная уязвимость —
+  в отдельном waiver максимум на 30 дней. Grype 0.117.0 напрямую принимает
+  OpenVEX/CSAF, но не выбранный CycloneDX VEX, поэтому stdlib evaluator
+  сопоставляет его с сырым JSON Grype и не может подавить техническую ошибку.
+  Новых зависимостей, IAM identities и внешних сервисов нет.
 - 2026-08-29: SBOM создаётся из уже опубликованного immutable image digest, а
   не из checkout или requirements-файла, поэтому включает финальный Debian-слой.
   Формат — CycloneDX JSON 1.6, инструмент — Syft с закреплёнными версией и
