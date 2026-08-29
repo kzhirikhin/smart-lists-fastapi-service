@@ -484,6 +484,10 @@ Ruleset `Protect main` выровнен с web-репозиторием 2026-08-
 - SBOM attachment блокирует deploy при технической ошибке и создаётся
   идемпотентно с media type `application/vnd.cyclonedx+json`. Отдельного архива
   нет: cleanup образа удаляет и attachment;
+- первый production run `33251609209` от 2026-08-29 создал attachment для
+  `sha256:b5e2b41c…41a6` до успешного Cloud Run deploy. Файл скачан обратно:
+  CycloneDX 1.6, Syft 1.51.0, 2858 components, 1 083 779 байт; его
+  `metadata.component.version` точно совпадает с target digest;
 - перед выкладкой образ сканируется grype (`--only-fixed`); шаг намеренно
   не блокирующий — см. раздел о границах защит;
 - Cloud Run service `insights-api` в `us-central1` разворачивается по digest
