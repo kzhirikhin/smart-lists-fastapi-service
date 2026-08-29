@@ -179,3 +179,55 @@ class TestInstallFlags:
         # Предыдущие проверки проходят и на пустом списке совпадений.
         joined = "\n".join(body for _, body in _workflows())
         assert len(re.findall(r"^\s*pip install", joined, re.MULTILINE)) >= 2
+
+
+class TestRecurringImageScan:
+    """Периодическая проверка смотрит на работающий immutable-артефакт.
+
+    Эти контракты не доказывают доступность GitHub или GCP, но не дают тихо
+    превратить fail-closed gate обратно в информационный deploy-time лог.
+    """
+
+    @pytest.fixture
+    def workflow(self) -> str:
+        return (WORKFLOWS_DIR / "image-scan.yml").read_text(encoding="utf-8")
+
+    def test_runs_on_schedule_and_manually(self, workflow: str) -> None:
+        assert re.search(r"^\s+schedule:\s*$", workflow, re.MULTILINE)
+        assert re.search(r"^\s+workflow_dispatch:\s*$", workflow, re.MULTILINE)
+        cron = re.search(r"cron:\s*['\"](\d+)\s", workflow)
+        assert cron is not None
+        assert cron.group(1) != "0"
+
+    def test_uses_dedicated_read_only_identity(self, workflow: str) -> None:
+        assert "github-image-scanner@" in workflow
+        assert "service_account: ${{ env.SCANNER_SA }}" in workflow
+        assert "service_account: github-deployer@" not in workflow
+        assert "gcloud run deploy" not in workflow
+        assert "docker/build-push-action" not in workflow
+
+    def test_resolves_cloud_run_revisions_to_expected_digests(
+        self, workflow: str
+    ) -> None:
+        assert "gcloud run services describe" in workflow
+        assert "gcloud run revisions describe" in workflow
+        assert "(.percent // 0) > 0" in workflow
+        assert ".tag != null" in workflow
+        assert 'prefix="${IMAGE}@sha256:"' in workflow
+        assert "^[0-9a-f]{64}$" in workflow
+
+    def test_scan_is_fail_closed_for_high_and_critical(self, workflow: str) -> None:
+        payload = "\n".join(
+            line for line in workflow.splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert 'grype "${image_ref}" --fail-on high -o json' in payload
+        assert "--only-fixed" not in payload
+        assert "continue-on-error" not in payload
+        assert "GRYPE_DB_REQUIRE_UPDATE_CHECK: 'true'" in payload
+        assert "GRYPE_DB_VALIDATE_AGE: 'true'" in payload
+        assert "grype db update" in payload
+
+    def test_reports_survive_a_failed_gate(self, workflow: str) -> None:
+        assert "if: always()" in workflow
+        assert "retention-days: 30" in workflow
