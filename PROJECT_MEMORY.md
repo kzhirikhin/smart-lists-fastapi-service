@@ -542,10 +542,13 @@ serving digest runtime evidence `PASS`: 18/18 checks, 18/18 candidate claims,
 `amd64`, `appuser`, 15 Python-файлов и отсутствие запуска контейнера. После
 advisory-review exact VEX в PR #38 подавляет 21 package match по 18 CVE:
 недостающие Perl-модули, недостижимые CLI/SQLite/ACL/Perl paths и одну
-32-битную Perl-уязвимость в `amd64`. Локальная оценка того же raw-отчёта оставляет
-2 Critical + 4 High — шесть match трёх glibc CVE; gate остаётся `BLOCKED` до их
-отдельного анализа. Waiver пуст. Raw Grype JSON, policy JSON, Markdown-сводка и
-evidence JSON сохранены одним artifact на 30 дней.
+32-битную Perl-уязвимость в `amd64`. После merge evidence PR #39 run
+`33299518793` тем же способом подтвердил 22/22 checks, 21/21 candidate claims и
+разбор 754 ELF exact rootfs. Отдельный review PR #40 добавляет шесть exact
+statements для трёх glibc CVE: до merge его локальная оценка raw-отчёта даёт
+VEX=27, waiver=0, Critical=0, High=0 и `PASS`; окончательный production rescan
+проверяется отдельно. Waiver пуст. Raw Grype JSON, policy JSON,
+Markdown-сводка и evidence JSON сохраняются одним artifact на 30 дней.
 
 `Gate: BLOCKED` — статус отдельного operational image-scan, а не required PR
 check и не release gate. Policy-only merge автоматически повторяет scan того
@@ -571,11 +574,11 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
 ## Важные решения
 
 - 2026-08-30: для production digest `sha256:082760…52fe3` после сверки exact
-  Grype match, официальных Debian advisory и runtime evidence выдан CycloneDX
-  VEX `not_affected` на 18 CVE / 21 package match. Он не утверждает, что версии
-  пакетов исправлены: уязвимый код отсутствует, требуемый runtime path
-  недостижим либо не совпадает архитектура. Три glibc CVE и waiver в решение не
-  включены; локальный gate поэтому остаётся `BLOCKED` на 2 Critical + 4 High.
+  Grype match, официальных Debian advisory и runtime evidence reviewed VEX
+  покрывает 21 CVE / 27 package match. Он не утверждает, что версии пакетов
+  исправлены: уязвимый код отсутствует, требуемый runtime path недостижим либо
+  не совпадает архитектура. Для трёх glibc CVE отдельно проверены 754 ELF и
+  точные условия advisory; waiver в решение не включён.
 - 2026-08-30: VEX по недостижимому runtime path должен опираться на байты exact
   production digest, а не на checkout или предположение о базовом образе.
   `image-scan.yml` поэтому сохраняет воспроизводимый inspect/rootfs evidence,
