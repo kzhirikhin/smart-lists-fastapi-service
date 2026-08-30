@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-29 (CycloneDX VEX и отдельный временный
+**Последнее обновление:** 2026-08-30 (CycloneDX VEX и отдельный временный
 waiver для recurring image gate)
 
 **Состояние:** активная разработка
@@ -518,8 +518,11 @@ push образа, а эта роль включает создание и чт�
 review PR. `security/waivers.json` отдельно описывает принятый реальный риск:
 owner/approver, reason, remediation plan, evidence и срок максимум 30 дней.
 Истёкшая запись, любой другой VEX state и wildcard не подавляют. Сейчас оба
-набора пусты. Локальная контрольная проверка текущего production digest
-`sha256:387964…4dd0` дала 7 Critical + 20 High, VEX=0, waiver=0 и красный gate.
+набора пусты. После слияния policy production run `33285245880` создал SBOM
+и развернул `sha256:5238cf…2dda1`; контрольный image-scan `33285372815`
+применил evaluator к этому digest: 7 Critical + 20 High до и после политики,
+VEX=0, waiver=0, gate `BLOCKED`. Raw Grype JSON, policy JSON и Markdown-сводка
+сохранены одним artifact на 30 дней.
 
 Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитория
 настраиваются `EXPECTED_CALLER_SA`, `SERVICE_AUDIENCE` и четыре `ANTHROPIC_*`
