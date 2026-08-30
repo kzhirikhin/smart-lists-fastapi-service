@@ -103,6 +103,7 @@ DNS-print функций, формат `%mc` с явной шириной бол
 run `33299518793` подтвердил runtime evidence: 22/22 checks и 21/21 candidate
 claims, включая 754 ELF exact rootfs; контейнер не запускался. После чтения
 официальных advisory VEX из review-PR №38 и №40 покрывает 27 exact package
-match по 21 CVE. До merge №40 локальная оценка raw-отчёта даёт Critical=0,
-High=0 и `PASS`; окончательный production rescan выполняется отдельно. Waiver
+match по 21 CVE. Финальный production run `33308851706` подтвердил ту же
+политику: до неё Critical=7 и High=20, подавлено VEX=27 и waiver=0, после неё
+Critical=0 и High=0, `Gate: PASS`; истёкших waiver match нет. Waiver
 по-прежнему пуст.
