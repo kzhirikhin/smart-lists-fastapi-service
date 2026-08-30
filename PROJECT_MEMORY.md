@@ -544,14 +544,16 @@ advisory-review exact VEX в PR #38 подавляет 21 package match по 18 
 недостающие Perl-модули, недостижимые CLI/SQLite/ACL/Perl paths и одну
 32-битную Perl-уязвимость в `amd64`. После merge evidence PR #39 run
 `33299518793` тем же способом подтвердил 22/22 checks, 21/21 candidate claims и
-разбор 754 ELF exact rootfs. Отдельный review PR #40 добавляет шесть exact
-statements для трёх glibc CVE: до merge его локальная оценка raw-отчёта даёт
-VEX=27, waiver=0, Critical=0, High=0 и `PASS`; окончательный production rescan
-проверяется отдельно. Waiver пуст. Raw Grype JSON, policy JSON,
-Markdown-сводка и evidence JSON сохраняются одним artifact на 30 дней.
+разбор 754 ELF exact rootfs. Отдельный review PR #40 добавил шесть exact
+statements для трёх glibc CVE. Финальный post-merge run `33308851706` проверил
+тот же serving digest: evidence 22/22, claims 21/21, до политики Critical=7 и
+High=20, подавлено VEX=27 и waiver=0, осталось Critical=0 и High=0, `Gate:
+PASS`. Истёкших waiver match нет. Raw Grype JSON, policy JSON,
+Markdown-сводка и evidence JSON сохранены одним artifact на 30 дней.
 
-`Gate: BLOCKED` — статус отдельного operational image-scan, а не required PR
-check и не release gate. Policy-only merge автоматически повторяет scan того
+`Gate: BLOCKED` и `Gate: PASS` — статусы конкретного operational image-scan, а
+не required PR check или release gate. Policy-only merge автоматически
+повторяет scan того
 же production digest и исключён из `deploy.yml`, иначе новый build немедленно
 сделал бы exact VEX/waiver устаревшим. Полный порядок реакции хранится в
 `security/SBOM_RUNBOOK.md`. Dependency-Track для одного контейнера не
