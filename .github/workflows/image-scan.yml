@@ -15,6 +15,7 @@ on:
       - security/vex/**
       - security/waivers.json
       - scripts/evaluate_image_scan.py
+      - scripts/verify_image_evidence.py
       - .github/workflows/image-scan.yml
 
 permissions:
@@ -138,9 +139,12 @@ jobs:
           echo "reports_dir=${reports_dir}" >> "${GITHUB_OUTPUT}"
 
       # Проверяем все обслуживающие digest, даже если первый уже уязвим.
+      # Контейнер не запускается: inspect/create/export дают конфигурацию и
+      # rootfs exact digest без сети, runtime identity и исполнения его кода.
       # Grype без `--fail-on` отличает техническую ошибку от результата, а
       # отдельный policy evaluator применяет только exact VEX/waiver и решает
-      # high/critical gate. Техническую ошибку политика подавить не может.
+      # high/critical gate. Ни техническую ошибку, ни провал evidence политика
+      # подавить не может.
       - name: Scan every serving digest
         run: |
           set -euo pipefail
@@ -151,6 +155,59 @@ jobs:
             raw_report="${report_prefix}-raw.json"
             policy_report="${report_prefix}-policy.json"
             policy_summary="${report_prefix}-summary.md"
+            evidence_report="${report_prefix}-evidence.json"
+            inspect_json="${RUNNER_TEMP}/image-inspect-${digest#sha256:}.json"
+            rootfs_tar="${RUNNER_TEMP}/image-rootfs-${digest#sha256:}.tar"
+
+            container_id=""
+            set +e
+            docker pull "${image_ref}"
+            evidence_code=$?
+            if (( evidence_code == 0 )); then
+              docker image inspect "${image_ref}" > "${inspect_json}"
+              evidence_code=$?
+            fi
+            if (( evidence_code == 0 )); then
+              container_id="$(docker create "${image_ref}")"
+              evidence_code=$?
+            fi
+            if (( evidence_code == 0 )); then
+              docker export --output "${rootfs_tar}" "${container_id}"
+              evidence_code=$?
+            fi
+            if (( evidence_code == 0 )); then
+              python scripts/verify_image_evidence.py \
+                --inspect "${inspect_json}" \
+                --rootfs-tar "${rootfs_tar}" \
+                --image-ref "${image_ref}" \
+                --image-digest "${digest}" \
+                --output "${evidence_report}"
+              evidence_code=$?
+            fi
+            if (( evidence_code != 0 )) && [[ ! -f "${evidence_report}" ]]; then
+              # Даже ранний Docker-сбой оставляет машиночитаемый ERROR artifact.
+              python scripts/verify_image_evidence.py \
+                --inspect "${inspect_json}" \
+                --rootfs-tar "${rootfs_tar}" \
+                --image-ref "${image_ref}" \
+                --image-digest "${digest}" \
+                --output "${evidence_report}"
+            fi
+            if [[ -n "${container_id}" ]]; then
+              docker rm -f "${container_id}" > /dev/null 2>&1
+            fi
+            rm -f "${inspect_json}" "${rootfs_tar}"
+            set -e
+
+            if (( evidence_code != 0 )); then
+              echo "::error::Runtime evidence не подтверждён для ${digest}, код ${evidence_code}"
+              printf -- '### Image runtime evidence — `%s`\n\n- Evidence: **ERROR**\n- Проверка завершилась с кодом %s\n\n' \
+                "${digest}" "${evidence_code}" >> "${GITHUB_STEP_SUMMARY}"
+              failed=1
+            else
+              printf -- '### Image runtime evidence — `%s`\n\n- Evidence: **PASS**\n- Контейнер не запускался; проверены inspect и exported rootfs exact digest.\n\n' \
+                "${digest}" >> "${GITHUB_STEP_SUMMARY}"
+            fi
 
             set +e
             grype "${image_ref}" -o json --file "${raw_report}"
@@ -186,9 +243,10 @@ jobs:
           done < "${{ steps.targets.outputs.targets_file }}"
           exit "${failed}"
 
-      # JSON сохраняется и при красном gate: это данные для разбора, а не
-      # архив удалённых образов. Короткий retention не подменяет историю SBOM.
-      - name: Upload Grype reports
+      # JSON Grype, policy и runtime evidence сохраняются и при красном gate:
+      # это данные для разбора, а не архив удалённых образов. Короткий retention
+      # не подменяет историю SBOM.
+      - name: Upload image scan reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

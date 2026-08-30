@@ -12,7 +12,9 @@ on:
       - security/vex/**
       - security/waivers.json
       - scripts/evaluate_image_scan.py
+      - scripts/verify_image_evidence.py
       - .github/workflows/image-scan.yml
+      - tests/test_image_evidence.py
       - tests/test_scan_policy.py
       - tests/test_supply_chain.py
 

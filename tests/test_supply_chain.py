@@ -267,6 +267,7 @@ class TestRecurringImageScan:
             "security/vex/**",
             "security/waivers.json",
             "scripts/evaluate_image_scan.py",
+            "scripts/verify_image_evidence.py",
             ".github/workflows/image-scan.yml",
         )
 
@@ -313,6 +314,25 @@ class TestRecurringImageScan:
         assert "GRYPE_DB_VALIDATE_AGE: 'true'" in payload
         assert "grype db update" in payload
 
+    def test_collects_runtime_evidence_without_running_image(
+        self, workflow: str
+    ) -> None:
+        payload = "\n".join(
+            line for line in workflow.splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert 'docker pull "${image_ref}"' in payload
+        assert 'docker image inspect "${image_ref}"' in payload
+        assert 'docker create "${image_ref}"' in payload
+        assert 'docker export --output "${rootfs_tar}" "${container_id}"' in payload
+        assert "python scripts/verify_image_evidence.py" in payload
+        assert '--image-ref "${image_ref}"' in payload
+        assert '--image-digest "${digest}"' in payload
+        assert '--output "${evidence_report}"' in payload
+        assert "if (( evidence_code != 0 ))" in payload
+        assert '[[ ! -f "${evidence_report}" ]]' in payload
+        assert "docker run" not in payload
+
     def test_policy_is_loaded_from_reviewed_main_checkout(self, workflow: str) -> None:
         assert "actions/checkout@" in workflow
         assert "persist-credentials: false" in workflow
@@ -323,3 +343,4 @@ class TestRecurringImageScan:
         assert "retention-days: 30" in workflow
         assert "${report_prefix}-raw.json" in workflow
         assert "${report_prefix}-policy.json" in workflow
+        assert "${report_prefix}-evidence.json" in workflow

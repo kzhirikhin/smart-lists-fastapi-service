@@ -12,6 +12,7 @@ images`; Artifact Registry хранит опись, но не принимает
 | CycloneDX SBOM attachment | Опись Python- и системных пакетов конкретного image digest | Deploy, если SBOM нельзя создать, проверить или прикрепить |
 | Grype в `deploy.yml` | Быстрая информационная дельта исправимых CVE новой сборки | Ничего: шаг имеет `continue-on-error` |
 | `image-scan.yml` | Еженедельная, ручная и policy-triggered проверка всех traffic/tagged Cloud Run digest | Свой workflow при High/Critical или технической ошибке |
+| Runtime evidence | Воспроизводимые факты о конфигурации, пакетах и путях исполнения exact digest без запуска контейнера | Тот же workflow при несовпадении или технической ошибке |
 | CycloneDX VEX | Доказанный `not_affected` для одной exact-находки | Ничего сам по себе; применяется policy evaluator |
 | Временный waiver | Явное принятие реального риска максимум на 30 дней | Ничего сам по себе; применяется policy evaluator |
 
@@ -25,10 +26,15 @@ deploy он автоматически не запрещает. Красный r
 
 1. Открыть failed run `Scan deployed Cloud Run images` и его job summary.
 2. Скачать artifact `grype-serving-image-reports-<run id>`. Для каждого digest
-   там находятся `*-raw.json`, `*-policy.json` и `*-summary.md`.
+   там находятся `*-raw.json`, `*-policy.json`, `*-summary.md` и
+   `*-evidence.json`.
 3. Разделить два класса отказа:
-   - `Gate: ERROR` или exit code `2` — сбой Grype, базы, GCP, JSON или policy.
-     Исключение запрещено: исправить техническую причину и повторить run;
+   - `Gate: ERROR`, `Evidence: ERROR` или exit code `2` — сбой Grype, базы,
+     GCP, Docker, JSON, policy либо чтения образа. Исключение запрещено:
+     исправить техническую причину и повторить run;
+   - `Evidence: FAIL` или exit code `1` у runtime evidence — факты exact image
+     не соответствуют ожидаемым. VEX по этим фактам запрещён: сначала разобрать
+     расхождение и повторить run;
    - `Gate: BLOCKED` или exit code `1` — после политики остались High/Critical.
      Разбирать массив `remaining` из policy JSON.
 4. Для каждой оставшейся exact-находки выбрать ровно один путь:
@@ -49,10 +55,24 @@ deploy он автоматически не запрещает. Красный r
 для нового образа нужна новая проверка и, если всё ещё необходимо, новое
 обоснование с новой точной привязкой.
 
+Runtime evidence строится именно из опубликованного `${IMAGE}@sha256:…`:
+workflow выполняет `docker image inspect`, затем `docker create` и
+`docker export`, но никогда `docker run`. Скрипт проверяет digest, `amd64`,
+non-root user, точный Uvicorn CMD, список установленных Debian-пакетов,
+отсутствие релевантных Perl-модулей и статически разбирает Python-исходники в
+`/app/app`. В `candidateClaims` перечислены 18 неглибсишных CVE и поддерживающие
+их проверки. `checksPassed: true` означает только, что автоматические факты
+сошлись: он не создаёт VEX и не заменяет чтение advisory и review. Три находки
+glibc (`CVE-2026-5435`, `CVE-2026-5450`, `CVE-2026-5928`) намеренно не входят в
+эти claims и требуют отдельного анализа native call path.
+
 ## Жизненный цикл исключений
 
 - VEX хранится как `security/vex/<64 hex digest>.cdx.json` и применим только к
   указанным CVE/package/version/purl/digest.
+- Для VEX, опирающегося на runtime path, evidence должно ссылаться на успешный
+  `*-evidence.json` того же digest и отдельно объяснять, почему конкретные
+  условия advisory не достигаются. Одного `checksPassed` недостаточно.
 - Waiver хранится в `security/waivers.json`, действует не более 30 дней и после
   `expiresAt` перестаёт подавлять автоматически.
 - Продление waiver — новая запись и новый review, а не изменение старой даты.
