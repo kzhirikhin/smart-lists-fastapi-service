@@ -30,6 +30,13 @@ def _finding(severity: str = "Critical") -> Finding:
     return Finding(key=PACKAGE, severity=severity)
 
 
+def test_repository_vex_documents_are_valid() -> None:
+    """Каждый закоммиченный VEX обязан проходить тот же строгий parser, что и scan."""
+    rules = load_vex_rules(Path("security/vex"), datetime.now(UTC))
+
+    assert all(rule.mechanism == "vex_not_affected" for rule in rules)
+
+
 def _vex_document(*, state: str = "not_affected", evidence: bool = True) -> dict:
     properties = []
     if evidence:
