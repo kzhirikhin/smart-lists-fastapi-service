@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-30 (runtime evidence exact production image)
+**Последнее обновление:** 2026-08-30 (VEX exact production image)
 
 **Состояние:** активная разработка
 
@@ -532,13 +532,17 @@ CycloneDX VEX. Три glibc CVE намеренно исключены до ан�
 `not_affected`: exact CVE, package name/version/purl и image digest, evidence и
 review PR. `security/waivers.json` отдельно описывает принятый реальный риск:
 owner/approver, reason, remediation plan, evidence и срок максимум 30 дней.
-Истёкшая запись, любой другой VEX state и wildcard не подавляют. Сейчас оба
-набора пусты. Production run `33297043344` создал SBOM и развернул
+Истёкшая запись, любой другой VEX state и wildcard не подавляют. Production run
+`33297043344` создал SBOM и развернул
 `sha256:082760…52fe3`; контрольный image-scan `33297174858` подтвердил для этого
 serving digest runtime evidence `PASS`: 18/18 checks, 18/18 candidate claims,
-`amd64`, `appuser`, 15 Python-файлов и отсутствие запуска контейнера. Policy
-оставила 7 Critical + 20 High, VEX=0, waiver=0, gate `BLOCKED`. Raw Grype JSON,
-policy JSON, Markdown-сводка и evidence JSON сохранены одним artifact на 30 дней.
+`amd64`, `appuser`, 15 Python-файлов и отсутствие запуска контейнера. После
+advisory-review exact VEX в PR #38 подавляет 21 package match по 18 CVE:
+недостающие Perl-модули, недостижимые CLI/SQLite/ACL/Perl paths и одну
+32-битную Perl-уязвимость в `amd64`. Локальная оценка того же raw-отчёта оставляет
+2 Critical + 4 High — шесть match трёх glibc CVE; gate остаётся `BLOCKED` до их
+отдельного анализа. Waiver пуст. Raw Grype JSON, policy JSON, Markdown-сводка и
+evidence JSON сохранены одним artifact на 30 дней.
 
 `Gate: BLOCKED` — статус отдельного operational image-scan, а не required PR
 check и не release gate. Policy-only merge автоматически повторяет scan того
@@ -563,6 +567,12 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
 
 ## Важные решения
 
+- 2026-08-30: для production digest `sha256:082760…52fe3` после сверки exact
+  Grype match, официальных Debian advisory и runtime evidence выдан CycloneDX
+  VEX `not_affected` на 18 CVE / 21 package match. Он не утверждает, что версии
+  пакетов исправлены: уязвимый код отсутствует, требуемый runtime path
+  недостижим либо не совпадает архитектура. Три glibc CVE и waiver в решение не
+  включены; локальный gate поэтому остаётся `BLOCKED` на 2 Critical + 4 High.
 - 2026-08-30: VEX по недостижимому runtime path должен опираться на байты exact
   production digest, а не на checkout или предположение о базовом образе.
   `image-scan.yml` поэтому сохраняет воспроизводимый inspect/rootfs evidence,
