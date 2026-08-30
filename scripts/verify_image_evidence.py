@@ -15,6 +15,7 @@ import argparse
 import ast
 import json
 import re
+import struct
 import sys
 import tarfile
 from dataclasses import asdict, dataclass
@@ -79,8 +80,28 @@ SENSITIVE_CALLS = {
     "trio.run_process",
 }
 
-# В отчёте явно видно, какие проверки поддерживают будущий VEX. Три CVE glibc
-# здесь намеренно отсутствуют: их нативный call path разбирается отдельно.
+ELF_MAGIC = b"\x7fELF"
+RUNTIME_PREFIXES = ("app/", "usr/local/")
+GLIBC_RESOLVER_SYMBOLS = {
+    "fp_nquery",
+    "__fp_nquery",
+    "ns_printrr",
+    "ns_printrrf",
+    "ns_sprintrr",
+    "ns_sprintrrf",
+    "__ns_sprintrr",
+    "__ns_sprintrrf",
+    "___ns_sprintrr",
+    "___ns_sprintrrf",
+}
+GLIBC_RESOLVER_PROVIDERS = {
+    "usr/lib/x86_64-linux-gnu/libc.so.6",
+    "usr/lib/x86_64-linux-gnu/libresolv.so.2",
+}
+GLIBC_LARGE_MC_FORMAT = re.compile(rb"%(?:[1-9][0-9]*\$)?([0-9]+)mc")
+GLIBC_UNGETWC_MARKERS = (b"ungetwc", b"libstdc++.so.6")
+
+# В отчёте явно видно, какие проверки поддерживают будущий VEX.
 CLAIM_CHECKS: dict[str, tuple[str, ...]] = {
     "CVE-2026-42496": ("perl_extended_packages_absent", "perl_archive_tar_absent"),
     "CVE-2026-42497": ("perl_extended_packages_absent", "perl_archive_tar_absent"),
@@ -135,6 +156,27 @@ CLAIM_CHECKS: dict[str, tuple[str, ...]] = {
         "application_no_process_execution",
         "application_no_native_library_loading",
         "application_no_sensitive_command_literals",
+    ),
+    "CVE-2026-5435": (
+        "runtime_entrypoint_exact",
+        "application_no_process_execution",
+        "application_no_native_library_loading",
+        "native_elf_parseable",
+        "glibc_resolver_debug_functions_unreferenced",
+    ),
+    "CVE-2026-5450": (
+        "runtime_entrypoint_exact",
+        "application_no_process_execution",
+        "application_no_native_library_loading",
+        "native_elf_parseable",
+        "glibc_scanf_large_mc_format_absent",
+    ),
+    "CVE-2026-5928": (
+        "runtime_entrypoint_exact",
+        "application_no_process_execution",
+        "application_no_native_library_loading",
+        "native_elf_parseable",
+        "glibc_ungetwc_runtime_surface_absent",
     ),
 }
 
@@ -282,6 +324,79 @@ def _analyse_python(path: str, source: bytes) -> dict[str, list[str]]:
         "dynamic_native_imports": sorted(dynamic_native_imports),
         "sensitive_literals": sorted(sensitive_literals),
     }
+
+
+def _c_string(table: bytes, offset: int) -> str:
+    if offset >= len(table):
+        return ""
+    end = table.find(b"\0", offset)
+    if end < 0:
+        end = len(table)
+    return table[offset:end].decode("ascii", errors="replace")
+
+
+def _undefined_elf_symbols(data: bytes) -> set[str]:
+    """Прочитать undefined dynamic symbols из ELF64 little-endian без запуска кода."""
+
+    if len(data) < 64 or data[:4] != ELF_MAGIC:
+        raise EvidenceInputError("усечённый ELF header")
+    if data[4] != 2 or data[5] != 1:
+        raise EvidenceInputError("ожидался ELF64 little-endian")
+
+    section_offset = struct.unpack_from("<Q", data, 40)[0]
+    section_entry_size = struct.unpack_from("<H", data, 58)[0]
+    section_count = struct.unpack_from("<H", data, 60)[0]
+    if section_count == 0:
+        raise EvidenceInputError("ELF без обычной section table не поддерживается")
+    if section_entry_size < 64:
+        raise EvidenceInputError("некорректный размер ELF section header")
+    if section_offset + section_entry_size * section_count > len(data):
+        raise EvidenceInputError("усечённая ELF section table")
+
+    sections = [
+        struct.unpack_from(
+            "<IIQQQQIIQQ",
+            data,
+            section_offset + index * section_entry_size,
+        )
+        for index in range(section_count)
+    ]
+    result: set[str] = set()
+    for section in sections:
+        if section[1] != 11:  # SHT_DYNSYM
+            continue
+        symbols_offset, symbols_size, strings_index, symbol_size = (
+            section[4],
+            section[5],
+            section[6],
+            section[9] or 24,
+        )
+        if strings_index >= len(sections) or symbol_size < 24:
+            raise EvidenceInputError("некорректная ELF dynamic symbol table")
+        if symbols_offset + symbols_size > len(data):
+            raise EvidenceInputError("усечённая ELF dynamic symbol table")
+
+        strings_section = sections[strings_index]
+        strings_offset, strings_size = strings_section[4], strings_section[5]
+        if strings_offset + strings_size > len(data):
+            raise EvidenceInputError("усечённая ELF dynamic string table")
+        strings = data[strings_offset : strings_offset + strings_size]
+
+        for symbol_offset in range(
+            symbols_offset,
+            symbols_offset + symbols_size,
+            symbol_size,
+        ):
+            if symbol_offset + 24 > len(data):
+                raise EvidenceInputError("усечённый ELF dynamic symbol")
+            name_offset, _, _, section_index, _, _ = struct.unpack_from(
+                "<IBBHQQ", data, symbol_offset
+            )
+            if section_index == 0:
+                name = _c_string(strings, name_offset)
+                if name:
+                    result.add(name)
+    return result
 
 
 def verify_image(
@@ -518,6 +633,92 @@ def verify_image(
             "имена уязвимых CLI отсутствуют в строковых литералах приложения"
             if not aggregate["sensitive_literals"]
             else f"найдено: {aggregate['sensitive_literals'][:5]!r}",
+        )
+
+        elf_count = 0
+        elf_errors: list[str] = []
+        resolver_references: list[str] = []
+        large_mc_formats: list[str] = []
+        runtime_ungetwc_references: list[str] = []
+        resolver_markers = {
+            symbol: symbol.encode("ascii") for symbol in GLIBC_RESOLVER_SYMBOLS
+        }
+
+        for name, member in sorted(members.items()):
+            if not member.isfile():
+                continue
+            data = _read_tar_file(
+                archive,
+                members,
+                name,
+                max_bytes=256 * 1024 * 1024,
+            )
+            runtime_file = name.startswith(RUNTIME_PREFIXES)
+
+            for match in GLIBC_LARGE_MC_FORMAT.finditer(data):
+                width = int(match.group(1))
+                if width > 1024:
+                    large_mc_formats.append(f"/{name}:%{width}mc")
+
+            if runtime_file:
+                for marker in GLIBC_UNGETWC_MARKERS:
+                    if marker in data:
+                        runtime_ungetwc_references.append(
+                            f"/{name}:{marker.decode('ascii')}"
+                        )
+                for symbol, marker in resolver_markers.items():
+                    if marker in data:
+                        resolver_references.append(f"/{name}:{symbol}")
+
+            if data[:4] != ELF_MAGIC:
+                continue
+            elf_count += 1
+            try:
+                undefined_symbols = _undefined_elf_symbols(data)
+            except EvidenceInputError as exc:
+                elf_errors.append(f"/{name}: {exc}")
+                continue
+
+            for symbol in sorted(GLIBC_RESOLVER_SYMBOLS & undefined_symbols):
+                resolver_references.append(f"/{name}:{symbol}")
+            if name not in GLIBC_RESOLVER_PROVIDERS:
+                for symbol, marker in resolver_markers.items():
+                    if marker in data:
+                        resolver_references.append(f"/{name}:{symbol}")
+
+            if runtime_file and "ungetwc" in undefined_symbols:
+                runtime_ungetwc_references.append(f"/{name}:ungetwc")
+
+        resolver_references = sorted(set(resolver_references))
+        runtime_ungetwc_references = sorted(set(runtime_ungetwc_references))
+        large_mc_formats = sorted(set(large_mc_formats))
+        record(
+            "native_elf_parseable",
+            not elf_errors,
+            f"без исполнения разобрано ELF-файлов: {elf_count}"
+            if not elf_errors
+            else f"ошибки ELF-разбора: {elf_errors[:5]!r}",
+        )
+        record(
+            "glibc_resolver_debug_functions_unreferenced",
+            not resolver_references,
+            "вне libc/libresolv нет импортов или runtime-ссылок на уязвимые DNS-print функции"
+            if not resolver_references
+            else f"найдены ссылки: {resolver_references[:5]!r}",
+        )
+        record(
+            "glibc_scanf_large_mc_format_absent",
+            not large_mc_formats,
+            "во всём exact rootfs нет формата %mc с явной шириной больше 1024"
+            if not large_mc_formats
+            else f"найдены форматы: {large_mc_formats[:5]!r}",
+        )
+        record(
+            "glibc_ungetwc_runtime_surface_absent",
+            not runtime_ungetwc_references,
+            "в /app и /usr/local нет вызовов ungetwc или загрузки libstdc++"
+            if not runtime_ungetwc_references
+            else f"найдены runtime-ссылки: {runtime_ungetwc_references[:5]!r}",
         )
 
     passed_by_id = {check.id: check.passed for check in checks}
