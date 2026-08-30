@@ -281,13 +281,27 @@ class TestRecurringImageScan:
             line for line in workflow.splitlines()
             if not line.lstrip().startswith("#")
         )
-        assert 'grype "${image_ref}" --fail-on high -o json' in payload
+        assert 'grype "${image_ref}" -o json --file "${raw_report}"' in payload
+        assert "python scripts/evaluate_image_scan.py" in payload
+        assert '--image-digest "${digest}"' in payload
+        assert "--vex-dir security/vex" in payload
+        assert "--waivers security/waivers.json" in payload
+        assert "if (( scan_code != 0 ))" in payload
+        assert "if (( policy_code != 0 ))" in payload
+        assert "--fail-on" not in payload
         assert "--only-fixed" not in payload
         assert "continue-on-error" not in payload
         assert "GRYPE_DB_REQUIRE_UPDATE_CHECK: 'true'" in payload
         assert "GRYPE_DB_VALIDATE_AGE: 'true'" in payload
         assert "grype db update" in payload
 
+    def test_policy_is_loaded_from_reviewed_main_checkout(self, workflow: str) -> None:
+        assert "actions/checkout@" in workflow
+        assert "persist-credentials: false" in workflow
+        assert "python-version: '3.13'" in workflow
+
     def test_reports_survive_a_failed_gate(self, workflow: str) -> None:
         assert "if: always()" in workflow
         assert "retention-days: 30" in workflow
+        assert "${report_prefix}-raw.json" in workflow
+        assert "${report_prefix}-policy.json" in workflow
