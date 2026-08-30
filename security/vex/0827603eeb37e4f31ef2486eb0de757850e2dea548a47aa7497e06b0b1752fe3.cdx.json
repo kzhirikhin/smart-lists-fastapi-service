@@ -3,9 +3,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
   "serialNumber": "urn:uuid:1ce41096-95f0-41e6-a5bf-41bf0529b114",
-  "version": 1,
+  "version": 2,
   "metadata": {
-    "timestamp": "2026-08-30T06:55:27Z",
+    "timestamp": "2026-08-30T07:40:00Z",
     "component": {
       "bom-ref": "pkg:oci/insights-api@sha256:0827603eeb37e4f31ef2486eb0de757850e2dea548a47aa7497e06b0b1752fe3",
       "type": "container",
@@ -19,11 +19,11 @@
       },
       {
         "name": "smart-lists:vex:reviewed-at",
-        "value": "2026-08-30T06:55:27Z"
+        "value": "2026-08-30T07:40:00Z"
       },
       {
         "name": "smart-lists:vex:approval",
-        "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/pull/38"
+        "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/pull/40"
       }
     ]
   },
@@ -83,6 +83,20 @@
       "name": "perl-base",
       "version": "5.40.1-6",
       "purl": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc",
+      "type": "library",
+      "name": "libc-bin",
+      "version": "2.41-12+deb13u3",
+      "purl": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc",
+      "type": "library",
+      "name": "libc6",
+      "version": "2.41-12+deb13u3",
+      "purl": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
     }
   ],
   "vulnerabilities": [
@@ -650,6 +664,168 @@
         {
           "name": "smart-lists:vex:evidence",
           "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33297174858"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5435",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимы устаревшие DNS-print функции для TSIG. В 754 ELF exact rootfs нет их импортов или ссылок вне поставляющих libc/libresolv, а runtime-приложение не запускает процессы и не загружает native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5435"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/e829145b186520a16b0d3cc87237c801b8302c1f/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33299518793"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5435",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимы устаревшие DNS-print функции для TSIG. В 754 ELF exact rootfs нет их импортов или ссылок вне поставляющих libc/libresolv, а runtime-приложение не запускает процессы и не загружает native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5435"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/e829145b186520a16b0d3cc87237c801b8302c1f/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33299518793"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5450",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Heap overflow требует scanf-формат %mc с явной шириной больше 1024. Полный scan exact rootfs не нашёл такого формата; приложение также не запускает CLI и не загружает native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5450"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/e829145b186520a16b0d3cc87237c801b8302c1f/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33299518793"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5450",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Heap overflow требует scanf-формат %mc с явной шириной больше 1024. Полный scan exact rootfs не нашёл такого формата; приложение также не запускает CLI и не загружает native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5450"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/e829145b186520a16b0d3cc87237c801b8302c1f/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33299518793"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5928",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Buffer under-read требует вызова ungetwc. В runtime-поверхности /app и /usr/local exact image нет вызовов ungetwc или загрузки libstdc++; приложение не запускает системные процессы и native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5928"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/e829145b186520a16b0d3cc87237c801b8302c1f/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33299518793"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5928",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Buffer under-read требует вызова ungetwc. В runtime-поверхности /app и /usr/local exact image нет вызовов ungetwc или загрузки libstdc++; приложение не запускает системные процессы и native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5928"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/e829145b186520a16b0d3cc87237c801b8302c1f/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33299518793"
         }
       ]
     }
