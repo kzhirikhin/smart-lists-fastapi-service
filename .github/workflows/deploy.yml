@@ -91,6 +91,14 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
+      # Встроенный `docker` driver runner не умеет экспортировать attestations.
+      # Явный docker-container builder поддерживает OCI provenance и использует
+      # ту же уже настроенную аутентификацию Artifact Registry.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        with:
+          driver: docker-container
+
       # Тег по SHA коммита остаётся — он нужен человеку, чтобы связать образ с
       # исходником. Тег `latest` убран: он мутабельный, его никто не потреблял,
       # а выкладка идёт по digest.

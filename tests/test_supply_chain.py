@@ -276,6 +276,14 @@ class TestBuildKitProvenance:
         dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
         assert re.search(r"^\s*ARG(?:\s|$)", dockerfile, re.MULTILINE) is None
 
+    def test_uses_attestation_capable_builder(self, workflow: str) -> None:
+        setup = workflow.index("- name: Set up Docker Buildx")
+        build = workflow.index("- name: Build and push image")
+        assert setup < build
+        setup_step = workflow[setup:build]
+        assert "docker/setup-buildx-action@" in setup_step
+        assert "driver: docker-container" in setup_step
+
     def test_verifies_exact_digest_before_sbom_and_deploy(self, workflow: str) -> None:
         build = workflow.index("- name: Build and push image")
         verify = workflow.index("- name: Verify BuildKit provenance")
