@@ -93,10 +93,64 @@ DNS-print функций, формат `%mc` с явной шириной бол
   dashboard и её эксплуатация не окупаются. Триггер пересмотра — несколько
   сервисов/команд, необходимость долгой истории, централизованных SLA и API.
 - **Provenance, подпись и attestation.** SBOM отвечает «что внутри», но не
-  доказывает, какой pipeline это собрал. Это отдельная будущая задача.
+  доказывает, какой pipeline это собрал. Контракт следующей отдельной задачи
+  определён ниже; выпуск и проверка attestation пока не реализованы.
 - **Автоматический запрет deploy.** Текущий image-scan — operational gate.
   Триггер пересмотра — выход приложения за текущий ограниченный круг,
   появление отдельной команды эксплуатации или требование release SLA.
+
+## Контракт будущего provenance
+
+Этот раздел сам ничего не разрешает: до реализации следующих этапов provenance
+не выпускается и deploy его не проверяет.
+
+Для каждого нового production digest должно быть криптографически проверяемо,
+что образ:
+
+- собран GitHub Actions в репозитории
+  `kzhirikhin/smart-lists-fastapi-service`;
+- собран workflow `.github/workflows/deploy.yml`;
+- относится к событию `push` для `refs/heads/main`;
+- создан в job, привязанной к GitHub Environment `production`;
+- собран из commit, равного `${{ github.sha }}` этого run;
+- имеет subject name без тега:
+  `us-central1-docker.pkg.dev/project-5b7c1bd1-572b-410d-826/smart-lists/insights-api`;
+- имеет subject digest, дословно равный `sha256:<64 hex>`, который вернул
+  `docker/build-push-action` и который затем получают SBOM, Grype и Cloud Run.
+
+Тег commit SHA помогает человеку найти образ, но не является доказательством:
+subject и deploy всегда адресуются по immutable digest.
+
+Выбраны два дополняющих утверждения:
+
+1. BuildKit SLSA provenance `mode=max` описывает материалы и параметры самой
+   сборки. Перед включением проверяется, что build arguments и secret IDs не
+   раскрывают чувствительные данные; секретные значения нельзя передавать как
+   build arguments.
+2. GitHub Artifact Attestation подписывает keyless-утверждение об exact subject
+   через OIDC/Sigstore. Долгоживущий signing key не создаётся. Именно
+   криптографическая проверка signer identity и полей выше является gate;
+   наличие неподписанного OCI metadata само по себе недостаточно.
+
+Deploy должен завершаться ошибкой, если attestation отсутствует; подпись или
+trusted root не проверяются; subject name/digest, signer repository/workflow,
+source SHA, ref, event либо environment отличаются; predicate неожиданного
+типа или неполон; verifier вернул техническую ошибку или неоднозначный
+результат. Проверяется exact digest без fallback на тег. `continue-on-error`,
+общий allowlist signer и ручной bypass внутри workflow не допускаются. Actions
+закрепляются полными SHA; версия verifier фиксируется или явно пишется в run.
+
+Provenance не доказывает безопасность кода и зависимостей и не защищает от
+осознанно вредоносного изменения самого доверенного workflow. Эту границу
+держат обязательный PR, отсутствие bypass-акторов, required checks и SHA-пины
+Actions. Проверка в том же deploy job подтверждает целостность выпуска и ловит
+ошибки конфигурации, но не является независимым от GitHub trusted builder.
+
+Критерий завершения всей задачи: production run создаёт новый digest, проверяет
+его подписанную attestation по всем полям выше, прикрепляет SBOM и разворачивает
+в Cloud Run ровно тот же digest. Негативные проверки доказывают отказ при
+подмене digest, repository/workflow и отсутствии attestation. Next.js/Vercel в
+этот контракт не входит: полный финальный runtime artifact нам не принадлежит.
 
 На production digest
 `sha256:0827603eeb37e4f31ef2486eb0de757850e2dea548a47aa7497e06b0b1752fe3`

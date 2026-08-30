@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-30 (VEX exact production image)
+**Последнее обновление:** 2026-08-30 (контракт provenance production image)
 
 **Состояние:** активная разработка
 
@@ -506,6 +506,16 @@ Ruleset `Protect main` выровнен с web-репозиторием 2026-08-
 - Cloud Run service `insights-api` в `us-central1` разворачивается по digest
   собранного образа, с явными `--service-account` и `--port 8000`.
 
+Provenance пока не выпускается и deploy его ещё не проверяет. Контракт будущей
+проверки зафиксирован в разделе provenance `security/SBOM_RUNBOOK.md`: exact
+subject — digest из build output; доверяются только этот репозиторий,
+`deploy.yml`, `push` в
+`refs/heads/main`, Environment `production` и тот же commit SHA. Выбраны два
+дополняющих механизма: BuildKit SLSA provenance `mode=max` для подробностей
+сборки и keyless GitHub Artifact Attestation через OIDC/Sigstore для
+криптографической signer identity. Любое отсутствие, несовпадение или
+техническая ошибка будущего verifier должны блокировать deploy.
+
 `.github/workflows/image-scan.yml` использует отдельную keyless identity
 `github-image-scanner@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com`.
 WIF разрешён только repository ID `1199475908` из `main`; у identity есть
@@ -595,6 +605,13 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
   digest, и старое exact-исключение на него не переносится. Dependency-Track,
   Next.js/Vercel SBOM и provenance в контур не входят; триггеры пересмотра
   зафиксированы в `security/SBOM_RUNBOOK.md`.
+- 2026-08-30: для отдельной задачи provenance определён контракт, но контроль
+  ещё не реализован. Production-образ должен иметь BuildKit SLSA provenance
+  `mode=max` и keyless GitHub Artifact Attestation exact digest. Доверенная
+  identity ограничена репозиторием, `deploy.yml`, `push` в `main`, Environment
+  `production` и текущим commit SHA; проверка до Cloud Run deploy fail-closed.
+  Долгоживущего signing key и отдельной service account не будет. Next.js/Vercel
+  остаётся вне контура, поскольку полный финальный artifact нам не принадлежит.
 - 2026-08-29: VEX не используется как эвфемизм для принятого риска. Только
   доказанный `not_affected` живёт в CycloneDX; реальная временная уязвимость —
   в отдельном waiver максимум на 30 дней. Grype 0.117.0 напрямую принимает
