@@ -6,6 +6,16 @@ on:
   schedule:
     - cron: '17 3 * * 3'
   workflow_dispatch:
+  # После merge policy-only PR проверяем тот же production digest автоматически.
+  # Эти пути исключены из deploy.yml, поэтому exact-привязка не устаревает.
+  push:
+    branches:
+      - main
+    paths:
+      - security/vex/**
+      - security/waivers.json
+      - scripts/evaluate_image_scan.py
+      - .github/workflows/image-scan.yml
 
 permissions:
   contents: read
