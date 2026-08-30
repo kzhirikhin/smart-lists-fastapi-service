@@ -259,6 +259,24 @@ class TestRecurringImageScan:
         assert cron is not None
         assert cron.group(1) != "0"
 
+    def test_policy_change_rescans_same_digest_without_redeploy(
+        self, workflow: str
+    ) -> None:
+        deploy = (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
+        policy_paths = (
+            "security/vex/**",
+            "security/waivers.json",
+            "scripts/evaluate_image_scan.py",
+            ".github/workflows/image-scan.yml",
+        )
+
+        assert re.search(r"^\s+push:\s*$", workflow, re.MULTILINE)
+        assert re.search(r"^\s+paths:\s*$", workflow, re.MULTILINE)
+        assert re.search(r"^\s+paths-ignore:\s*$", deploy, re.MULTILINE)
+        for path in policy_paths:
+            assert f"- {path}" in workflow
+            assert f"- {path}" in deploy
+
     def test_uses_dedicated_read_only_identity(self, workflow: str) -> None:
         assert "github-image-scanner@" in workflow
         assert "service_account: ${{ env.SCANNER_SA }}" in workflow

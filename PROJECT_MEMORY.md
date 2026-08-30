@@ -3,8 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-30 (CycloneDX VEX и отдельный временный
-waiver для recurring image gate)
+**Последнее обновление:** 2026-08-30 (эксплуатационный контур SBOM/image scan)
 
 **Состояние:** активная разработка
 
@@ -70,6 +69,8 @@ web-приложения Smart Lists. Он получает ограниченн
 - `.github/workflows/deploy.yml` — test-gated keyless deployment;
 - `.github/workflows/image-scan.yml` — еженедельный и ручной fail-closed scan
   фактически обслуживающих Cloud Run digest;
+- `security/SBOM_RUNBOOK.md` — границы контура и порядок разбора красного
+  image-scan;
 - `Dockerfile` — production image: multi-stage, в runtime только `app/` и
   установленные пакеты, без pip и без файлов репозитория;
 - `docker-compose.yml` — локальный запуск со сборкой образа из этого же
@@ -386,9 +387,9 @@ Bruno collection содержит ручные запросы. Её `secret` —
 pytest tests/ -v
 ```
 
-Сейчас прогон даёт 116 проверок: 47 в `tests/test_insights.py`, включая два
+Сейчас прогон даёт 117 проверок: 47 в `tests/test_insights.py`, включая два
 параметризованных теста бюджетов, 6 в `tests/test_anthropic_auth.py`, 13 в
-`tests/test_scan_policy.py` и 50 в `tests/test_supply_chain.py`.
+`tests/test_scan_policy.py` и 51 в `tests/test_supply_chain.py`.
 
 `test_supply_chain.py` — статические контракты цепочки поставок, аналог набора
 `security-static` из web-репозитория. Отдельного gate здесь нет, поэтому они
@@ -524,6 +525,14 @@ owner/approver, reason, remediation plan, evidence и срок максимум 
 VEX=0, waiver=0, gate `BLOCKED`. Raw Grype JSON, policy JSON и Markdown-сводка
 сохранены одним artifact на 30 дней.
 
+`Gate: BLOCKED` — статус отдельного operational image-scan, а не required PR
+check и не release gate. Policy-only merge автоматически повторяет scan того
+же production digest и исключён из `deploy.yml`, иначе новый build немедленно
+сделал бы exact VEX/waiver устаревшим. Полный порядок реакции хранится в
+`security/SBOM_RUNBOOK.md`. Dependency-Track для одного контейнера не
+внедряется; Next.js/Vercel artifact SBOM и provenance остаются вне этого
+контура.
+
 Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитория
 настраиваются `EXPECTED_CALLER_SA`, `SERVICE_AUDIENCE` и четыре `ANTHROPIC_*`
 идентификатора — все несекретные. Сервис выполняется под
@@ -539,6 +548,12 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
 
 ## Важные решения
 
+- 2026-08-30: строгий image-scan остаётся operational gate, а не автоматическим
+  запретом merge/deploy. Policy-only изменения запускают его по push в `main`,
+  но не пересобирают image; mixed runtime+policy PR по-прежнему создаёт новый
+  digest, и старое exact-исключение на него не переносится. Dependency-Track,
+  Next.js/Vercel SBOM и provenance в контур не входят; триггеры пересмотра
+  зафиксированы в `security/SBOM_RUNBOOK.md`.
 - 2026-08-29: VEX не используется как эвфемизм для принятого риска. Только
   доказанный `not_affected` живёт в CycloneDX; реальная временная уязвимость —
   в отдельном waiver максимум на 30 дней. Grype 0.117.0 напрямую принимает
