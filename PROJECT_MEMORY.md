@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-30 (эксплуатационный контур SBOM/image scan)
+**Последнее обновление:** 2026-08-30 (runtime evidence exact production image)
 
 **Состояние:** активная разработка
 
@@ -26,14 +26,14 @@ web-приложения Smart Lists. Он получает ограниченн
 ## Актуальный стек
 
 - Python 3.13;
-- FastAPI `0.135.3`, Starlette `1.3.1`, Uvicorn `0.42.0`;
-- Pydantic `2.12.5` и pydantic-settings `2.14.2`;
+- FastAPI `0.141.1`, Starlette `1.3.1`, Uvicorn `0.52.2`;
+- Pydantic `2.12.5` и pydantic-settings `2.15.0`;
 - Anthropic SDK `0.121.0` — версия, в которой появился
   `WorkloadIdentityCredentials`;
-- SlowAPI `0.1.9`;
+- SlowAPI `0.1.10`;
 - google-auth `2.56.3` и requests `2.34.2` — проверка входящих Google
   ID-токенов и запрос собственного токена у metadata-сервера;
-- pytest `9.0.3`, pytest-asyncio и FastAPI TestClient;
+- pytest `9.1.1`, pytest-asyncio `1.4.0` и FastAPI TestClient;
 - Docker, Google Artifact Registry и Google Cloud Run;
 - GitHub Actions, GitHub OIDC и Google Workload Identity Federation;
 - Grype `0.117.0` для deploy-time и еженедельного image scanning.
@@ -69,6 +69,8 @@ web-приложения Smart Lists. Он получает ограниченн
 - `.github/workflows/deploy.yml` — test-gated keyless deployment;
 - `.github/workflows/image-scan.yml` — еженедельный и ручной fail-closed scan
   фактически обслуживающих Cloud Run digest;
+- `scripts/verify_image_evidence.py` — offline-проверка inspect/rootfs exact
+  digest для технического обоснования VEX без запуска контейнера;
 - `security/SBOM_RUNBOOK.md` — границы контура и порядок разбора красного
   image-scan;
 - `Dockerfile` — production image: multi-stage, в runtime только `app/` и
@@ -387,9 +389,10 @@ Bruno collection содержит ручные запросы. Её `secret` —
 pytest tests/ -v
 ```
 
-Сейчас прогон даёт 117 проверок: 47 в `tests/test_insights.py`, включая два
+Сейчас прогон даёт 144 проверки: 47 в `tests/test_insights.py`, включая два
 параметризованных теста бюджетов, 6 в `tests/test_anthropic_auth.py`, 13 в
-`tests/test_scan_policy.py` и 51 в `tests/test_supply_chain.py`.
+`tests/test_scan_policy.py`, 52 в `tests/test_supply_chain.py` и 26 в
+`tests/test_image_evidence.py`.
 
 `test_supply_chain.py` — статические контракты цепочки поставок, аналог набора
 `security-static` из web-репозитория. Отдельного gate здесь нет, поэтому они
@@ -398,7 +401,8 @@ pytest tests/ -v
 версий `.in` ↔ `.txt` вместе с сохранностью заголовка pip-compile и хешей;
 наличие `--require-hashes` и `--only-binary=:all:` у каждой установки в
 workflow и в `Dockerfile`; recurring scan дополнительно фиксирует вызов exact
-policy evaluator и раздельное сохранение raw/policy отчётов. Базовые
+policy evaluator, offline runtime evidence без `docker run` и раздельное
+сохранение raw/policy/evidence отчётов. Базовые
 утверждения были истинны и до появления тестов — закрепляется не их появление,
 а то, что они не станут ложными молча.
 
@@ -513,6 +517,16 @@ project-level `roles/run.viewer` и repository-level
 Новой identity для SBOM нет: `github-deployer` уже имел repository write для
 push образа, а эта роль включает создание и чтение attachments.
 
+Перед Grype recurring workflow скачивает каждый обслуживающий exact digest и
+без запуска контейнера читает его конфигурацию и rootfs через `docker image
+inspect` + `docker create/export`. Fail-closed скрипт сверяет digest,
+архитектуру `amd64`, пользователя `appuser`, точный Uvicorn CMD, Debian-пакеты,
+наличие релевантных Perl-модулей и AST фактических Python-исходников в
+`/app/app`. JSON evidence сохраняется рядом с raw/policy отчётами. Он содержит
+поддерживающие проверки для 18 неглибсишных CVE, но ничего не подавляет
+автоматически: `checksPassed` — вход для отдельного advisory-review и exact
+CycloneDX VEX. Три glibc CVE намеренно исключены до анализа native call path.
+
 Репозиторная политика исключений не требует внешнего сервиса и новых прав.
 `security/vex/<digest>.cdx.json` содержит CycloneDX 1.6 только для доказанного
 `not_affected`: exact CVE, package name/version/purl и image digest, evidence и
@@ -548,6 +562,12 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
 
 ## Важные решения
 
+- 2026-08-30: VEX по недостижимому runtime path должен опираться на байты exact
+  production digest, а не на checkout или предположение о базовом образе.
+  `image-scan.yml` поэтому сохраняет воспроизводимый inspect/rootfs evidence,
+  не исполняя образ. Автоматический PASS не равен `not_affected`: решение и
+  CycloneDX VEX остаются отдельным review; glibc-находки этим контролем не
+  закрываются. Новых зависимостей, внешних сервисов и IAM-прав нет.
 - 2026-08-30: строгий image-scan остаётся operational gate, а не автоматическим
   запретом merge/deploy. Policy-only изменения запускают его по push в `main`,
   но не пересобирают image; mixed runtime+policy PR по-прежнему создаёт новый
