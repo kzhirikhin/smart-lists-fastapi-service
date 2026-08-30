@@ -241,6 +241,63 @@ class TestCycloneDxSbom:
         assert "actions/upload-artifact" not in step
 
 
+class TestBuildKitProvenance:
+    """Build output содержит подробный SLSA provenance exact digest.
+
+    Это ещё не проверка signer identity: её даст keyless GitHub attestation.
+    Здесь закреплены генерация `mode=max`, отсутствие каналов утечки build args
+    и fail-closed проверка опубликованного документа до SBOM и deploy.
+    """
+
+    @pytest.fixture
+    def workflow(self) -> str:
+        return (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
+
+    @pytest.fixture
+    def build_step(self, workflow: str) -> str:
+        marker = "- name: Build and push image"
+        assert marker in workflow
+        return workflow.split(marker, 1)[1].split("\n      - name:", 1)[0]
+
+    @pytest.fixture
+    def verify_step(self, workflow: str) -> str:
+        marker = "- name: Verify BuildKit provenance"
+        assert marker in workflow
+        return workflow.split(marker, 1)[1].split("\n      - name:", 1)[0]
+
+    def test_mode_max_has_no_sensitive_input_channel(self, build_step: str) -> None:
+        assert "provenance: mode=max,version=v1" in build_step
+        for key in ("build-args:", "secrets:", "secret-envs:", "secret-files:"):
+            assert (
+                re.search(rf"^\s*{re.escape(key)}", build_step, re.MULTILINE)
+                is None
+            )
+
+        dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        assert re.search(r"^\s*ARG(?:\s|$)", dockerfile, re.MULTILINE) is None
+
+    def test_verifies_exact_digest_before_sbom_and_deploy(self, workflow: str) -> None:
+        build = workflow.index("- name: Build and push image")
+        verify = workflow.index("- name: Verify BuildKit provenance")
+        sbom = workflow.index("- name: Generate and attach CycloneDX SBOM")
+        deploy = workflow.index("- name: Deploy to Cloud Run")
+        assert build < verify < sbom < deploy
+
+    def test_verifier_requires_detailed_slsa(self, verify_step: str) -> None:
+        assert '[[ "${DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]' in verify_step
+        assert 'imagetools inspect "${IMAGE}@${DIGEST}"' in verify_step
+        assert "{{ json .Provenance.SLSA }}" in verify_step
+        assert ".buildDefinition.buildType" in verify_step
+        assert ".buildDefinition.resolvedDependencies" in verify_step
+        assert (
+            ".buildDefinition.internalParameters.buildConfig.llbDefinition"
+            in verify_step
+        )
+        assert ".runDetails.metadata.buildkit_metadata.source.infos" in verify_step
+        assert '.filename == "Dockerfile"' in verify_step
+        assert "continue-on-error" not in verify_step
+
+
 class TestRecurringImageScan:
     """Периодическая проверка смотрит на работающий immutable-артефакт.
 

@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-30 (контракт provenance production image)
+**Последнее обновление:** 2026-08-30 (генерация BuildKit provenance)
 
 **Состояние:** активная разработка
 
@@ -506,15 +506,16 @@ Ruleset `Protect main` выровнен с web-репозиторием 2026-08-
 - Cloud Run service `insights-api` в `us-central1` разворачивается по digest
   собранного образа, с явными `--service-account` и `--port 8000`.
 
-Provenance пока не выпускается и deploy его ещё не проверяет. Контракт будущей
-проверки зафиксирован в разделе provenance `security/SBOM_RUNBOOK.md`: exact
-subject — digest из build output; доверяются только этот репозиторий,
-`deploy.yml`, `push` в
-`refs/heads/main`, Environment `production` и тот же commit SHA. Выбраны два
-дополняющих механизма: BuildKit SLSA provenance `mode=max` для подробностей
-сборки и keyless GitHub Artifact Attestation через OIDC/Sigstore для
-криптографической signer identity. Любое отсутствие, несовпадение или
-техническая ошибка будущего verifier должны блокировать deploy.
+BuildKit provenance включён как SLSA v1 `mode=max`; production-подтверждение
+нового
+digest ожидается после merge. До SBOM и Cloud Run workflow читает exact
+`${IMAGE}@${DIGEST}` через `docker buildx imagetools inspect` и fail-closed
+требует BuildKit build type, непустые materials/LLB и встроенный Dockerfile.
+Аудит подтвердил отсутствие `ARG`, `build-args` и secret inputs, поэтому
+подробный документ не получает чувствительные значения. Это пока только
+metadata сборки: keyless GitHub Artifact Attestation и криптографическая
+проверка signer identity остаются этапом 3. Полный контракт хранится в разделе
+provenance `security/SBOM_RUNBOOK.md`.
 
 `.github/workflows/image-scan.yml` использует отдельную keyless identity
 `github-image-scanner@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com`.
@@ -612,6 +613,12 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
   `production` и текущим commit SHA; проверка до Cloud Run deploy fail-closed.
   Долгоживущего signing key и отдельной service account не будет. Next.js/Vercel
   остаётся вне контура, поскольку полный финальный artifact нам не принадлежит.
+- 2026-08-30: этап 2 provenance реализован в deploy workflow, production run
+  ожидается после merge. `docker/build-push-action` выпускает BuildKit SLSA
+  v1 `mode=max`; отдельный fail-closed шаг проверяет подробный документ exact
+  digest до SBOM и Cloud Run. Статический контракт запрещает незаметно добавить
+  `ARG`/build secret inputs без пересмотра риска раскрытия. Подписи и проверки
+  GitHub signer identity на этом этапе ещё нет.
 - 2026-08-29: VEX не используется как эвфемизм для принятого риска. Только
   доказанный `not_affected` живёт в CycloneDX; реальная временная уязвимость —
   в отдельном waiver максимум на 30 дней. Grype 0.117.0 напрямую принимает

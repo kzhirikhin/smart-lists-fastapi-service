@@ -101,6 +101,43 @@ jobs:
           context: .
           push: true
           tags: ${{ env.IMAGE }}:${{ github.sha }}
+          # mode=max сохраняет материалы, LLB и Dockerfile. В Dockerfile нет
+          # ARG, а build-шаг не принимает build-args/secrets: чувствительным
+          # значениям неоткуда попасть в подробный provenance.
+          provenance: mode=max,version=v1
+
+      # BuildKit metadata пока не доказывает GitHub signer identity — это
+      # делает отдельная keyless attestation следующего этапа. Здесь fail-closed
+      # подтверждаем более узкий контракт: exact опубликованный digest содержит
+      # действительно подробный SLSA provenance, а не пустой/min документ.
+      - name: Verify BuildKit provenance
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "${DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "Build returned an invalid digest: ${DIGEST}" >&2
+            exit 1
+          }
+
+          provenance="${RUNNER_TEMP}/buildkit-provenance-${DIGEST#sha256:}.json"
+          docker buildx imagetools inspect "${IMAGE}@${DIGEST}" \
+            --format '{{ json .Provenance.SLSA }}' > "${provenance}"
+          jq -e '
+            type == "object" and
+            .buildDefinition.buildType ==
+              "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md" and
+            (.buildDefinition.resolvedDependencies | type == "array" and length > 0) and
+            (
+              .buildDefinition.internalParameters.buildConfig.llbDefinition |
+              type == "array" and length > 0
+            ) and
+            (
+              .runDetails.metadata.buildkit_metadata.source.infos |
+              type == "array" and
+              any(.[]; .filename == "Dockerfile")
+            )
+          ' "${provenance}" > /dev/null
 
       # SBOM строится по immutable digest уже опубликованного образа, а не по
       # рабочей директории или тегу. Поэтому опись включает и Python-пакеты, и
