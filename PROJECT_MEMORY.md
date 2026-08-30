@@ -533,11 +533,12 @@ CycloneDX VEX. Три glibc CVE намеренно исключены до ан�
 review PR. `security/waivers.json` отдельно описывает принятый реальный риск:
 owner/approver, reason, remediation plan, evidence и срок максимум 30 дней.
 Истёкшая запись, любой другой VEX state и wildcard не подавляют. Сейчас оба
-набора пусты. После слияния policy production run `33285245880` создал SBOM
-и развернул `sha256:5238cf…2dda1`; контрольный image-scan `33285372815`
-применил evaluator к этому digest: 7 Critical + 20 High до и после политики,
-VEX=0, waiver=0, gate `BLOCKED`. Raw Grype JSON, policy JSON и Markdown-сводка
-сохранены одним artifact на 30 дней.
+набора пусты. Production run `33297043344` создал SBOM и развернул
+`sha256:082760…52fe3`; контрольный image-scan `33297174858` подтвердил для этого
+serving digest runtime evidence `PASS`: 18/18 checks, 18/18 candidate claims,
+`amd64`, `appuser`, 15 Python-файлов и отсутствие запуска контейнера. Policy
+оставила 7 Critical + 20 High, VEX=0, waiver=0, gate `BLOCKED`. Raw Grype JSON,
+policy JSON, Markdown-сводка и evidence JSON сохранены одним artifact на 30 дней.
 
 `Gate: BLOCKED` — статус отдельного operational image-scan, а не required PR
 check и не release gate. Policy-only merge автоматически повторяет scan того

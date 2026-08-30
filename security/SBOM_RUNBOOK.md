@@ -97,6 +97,8 @@ glibc (`CVE-2026-5435`, `CVE-2026-5450`, `CVE-2026-5928`) намеренно н�
   появление отдельной команды эксплуатации или требование release SLA.
 
 Текущее безопасное исходное состояние — пустые VEX и waiver. На production
-digest `sha256:5238cf8b91caa11c2416b283c4a26cd0758b60dab0051f83d9c7a5245be2dda1`
-контрольный run `33285372815` подавил 0 находок и ожидаемо остался `BLOCKED` на
-7 Critical + 20 High.
+digest `sha256:0827603eeb37e4f31ef2486eb0de757850e2dea548a47aa7497e06b0b1752fe3`
+контрольный run `33297174858` подтвердил runtime evidence: 18/18 checks и 18/18
+candidate claims, `amd64`, `appuser`, 15 Python-файлов, контейнер не запускался.
+Политика подавила 0 находок и ожидаемо осталась `BLOCKED` на 7 Critical +
+20 High.
