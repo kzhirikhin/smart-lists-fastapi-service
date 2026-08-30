@@ -60,11 +60,13 @@ workflow выполняет `docker image inspect`, затем `docker create` �
 `docker export`, но никогда `docker run`. Скрипт проверяет digest, `amd64`,
 non-root user, точный Uvicorn CMD, список установленных Debian-пакетов,
 отсутствие релевантных Perl-модулей и статически разбирает Python-исходники в
-`/app/app`. В `candidateClaims` перечислены 18 неглибсишных CVE и поддерживающие
-их проверки. `checksPassed: true` означает только, что автоматические факты
-сошлись: он не создаёт VEX и не заменяет чтение advisory и review. Три находки
-glibc (`CVE-2026-5435`, `CVE-2026-5450`, `CVE-2026-5928`) намеренно не входят в
-эти claims и требуют отдельного анализа native call path.
+`/app/app`. Для native call path он без запуска разбирает undefined dynamic
+symbols каждого ELF64-файла и сканирует exact rootfs: импорты устаревших
+DNS-print функций, формат `%mc` с явной шириной больше 1024 и ссылки на
+`ungetwc`/`libstdc++` в runtime-поверхности `/app` + `/usr/local`. В
+`candidateClaims` перечислена 21 CVE и поддерживающие проверки.
+`checksPassed: true` означает только, что автоматические факты сошлись: он не
+создаёт VEX и не заменяет чтение advisory и review.
 
 ## Жизненный цикл исключений
 

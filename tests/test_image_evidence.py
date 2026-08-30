@@ -119,7 +119,7 @@ def _checks(report: dict[str, object]) -> dict[str, bool]:
     }
 
 
-def test_safe_exact_image_passes_without_glibc_claims(tmp_path: Path) -> None:
+def test_safe_exact_image_passes_with_glibc_claims(tmp_path: Path) -> None:
     inspect_path, rootfs_path = _fixture_files(tmp_path)
 
     report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
@@ -127,11 +127,67 @@ def test_safe_exact_image_passes_without_glibc_claims(tmp_path: Path) -> None:
     assert report["status"] == "PASS"
     assert all(_checks(report).values())
     claims = report["candidateClaims"]
-    assert len(claims) == len(CLAIM_CHECKS) == 18
+    assert len(claims) == len(CLAIM_CHECKS) == 21
     assert all(item["checksPassed"] for item in claims)
-    assert {item["vulnerabilityId"] for item in claims}.isdisjoint(
-        {"CVE-2026-5435", "CVE-2026-5450", "CVE-2026-5928"}
+    assert {"CVE-2026-5435", "CVE-2026-5450", "CVE-2026-5928"} <= {
+        item["vulnerabilityId"] for item in claims
+    }
+
+
+@pytest.mark.parametrize(
+    ("source", "failed_check"),
+    [
+        (
+            b"RESOLVER_SYMBOL = 'ns_sprintrrf'\n",
+            "glibc_resolver_debug_functions_unreferenced",
+        ),
+        (
+            b"SCAN_FORMAT = '%1025mc'\n",
+            "glibc_scanf_large_mc_format_absent",
+        ),
+        (
+            b"NATIVE_LIBRARY = 'libstdc++.so.6'\n",
+            "glibc_ungetwc_runtime_surface_absent",
+        ),
+    ],
+)
+def test_glibc_runtime_precondition_fails_closed(
+    tmp_path: Path,
+    source: bytes,
+    failed_check: str,
+) -> None:
+    inspect_path, rootfs_path = _fixture_files(tmp_path, app_source=source)
+
+    report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
+
+    assert report["status"] == "FAIL"
+    assert _checks(report)[failed_check] is False
+
+
+def test_glibc_scanf_width_up_to_1024_is_not_vulnerable_condition(
+    tmp_path: Path,
+) -> None:
+    inspect_path, rootfs_path = _fixture_files(
+        tmp_path,
+        app_source=b"SCAN_FORMAT = '%1024mc'\n",
     )
+
+    report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
+
+    assert report["status"] == "PASS"
+    assert _checks(report)["glibc_scanf_large_mc_format_absent"] is True
+
+
+def test_invalid_runtime_elf_fails_closed(tmp_path: Path) -> None:
+    inspect_path, rootfs_path = _fixture_files(
+        tmp_path,
+        extra_files={"usr/local/lib/broken.so": b"\x7fELF"},
+    )
+
+    report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
+
+    assert report["status"] == "FAIL"
+    assert _checks(report)["native_elf_parseable"] is False
 
 
 def test_root_directory_tar_member_is_accepted(tmp_path: Path) -> None:

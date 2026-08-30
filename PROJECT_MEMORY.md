@@ -522,10 +522,13 @@ push образа, а эта роль включает создание и чт�
 inspect` + `docker create/export`. Fail-closed скрипт сверяет digest,
 архитектуру `amd64`, пользователя `appuser`, точный Uvicorn CMD, Debian-пакеты,
 наличие релевантных Perl-модулей и AST фактических Python-исходников в
-`/app/app`. JSON evidence сохраняется рядом с raw/policy отчётами. Он содержит
-поддерживающие проверки для 18 неглибсишных CVE, но ничего не подавляет
-автоматически: `checksPassed` — вход для отдельного advisory-review и exact
-CycloneDX VEX. Три glibc CVE намеренно исключены до анализа native call path.
+`/app/app`. Для glibc он дополнительно без исполнения разбирает undefined
+dynamic symbols всех ELF64-файлов и ищет условия трёх advisory во всём exact
+rootfs и runtime-поверхности `/app` + `/usr/local`: DNS-print symbols,
+`%mc` с шириной больше 1024 и путь `ungetwc`/`libstdc++`. JSON evidence
+сохраняется рядом с raw/policy отчётами. Он содержит поддерживающие проверки
+для 21 CVE, но ничего не подавляет автоматически: `checksPassed` — вход для
+отдельного advisory-review и exact CycloneDX VEX.
 
 Репозиторная политика исключений не требует внешнего сервиса и новых прав.
 `security/vex/<digest>.cdx.json` содержит CycloneDX 1.6 только для доказанного
@@ -577,8 +580,10 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
   production digest, а не на checkout или предположение о базовом образе.
   `image-scan.yml` поэтому сохраняет воспроизводимый inspect/rootfs evidence,
   не исполняя образ. Автоматический PASS не равен `not_affected`: решение и
-  CycloneDX VEX остаются отдельным review; glibc-находки этим контролем не
-  закрываются. Новых зависимостей, внешних сервисов и IAM-прав нет.
+  CycloneDX VEX остаются отдельным review. Для трёх glibc-находок fail-closed
+  контроль проверяет именно условия официальных advisory и все ELF exact
+  rootfs; сам по себе этот контроль их не закрывает. Новых зависимостей,
+  внешних сервисов и IAM-прав нет.
 - 2026-08-30: строгий image-scan остаётся operational gate, а не автоматическим
   запретом merge/deploy. Policy-only изменения запускают его по push в `main`,
   но не пересобирают image; mixed runtime+policy PR по-прежнему создаёт новый
