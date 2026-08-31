@@ -377,10 +377,14 @@ class TestGitHubArtifactAttestation:
             assert flag in verify_step
         assert '[[ "${GITHUB_EVENT_NAME}" == "push" ]]' in verify_step
         assert '[[ "${GITHUB_REF}" == "refs/heads/main" ]]' in verify_step
-        assert ".DeploymentEnvironment" in verify_step
-        assert ".BuildTrigger" in verify_step
-        assert ".RunnerEnvironment" in verify_step
-        assert ".SourceRepositoryIdentifier" in verify_step
+        assert ".buildTrigger" in verify_step
+        assert ".runnerEnvironment" in verify_step
+        assert ".sourceRepositoryIdentifier" in verify_step
+        assert "python scripts/verify_attestation_certificate.py" in verify_step
+        assert "--environment production" in verify_step
+        assert "--event push" in verify_step
+        assert "--runner github-hosted" in verify_step
+        assert '--repository-id "${TRUSTED_REPOSITORY_ID}"' in verify_step
         assert 'TRUSTED_REPOSITORY_ID: \'1199475908\'' in verify_step
         assert ".verifiedTimestamps | length > 0" in verify_step
 

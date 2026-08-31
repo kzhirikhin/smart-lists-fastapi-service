@@ -220,16 +220,21 @@ jobs:
                 .verificationResult.statement.subject[0].name == $image and
                 .verificationResult.statement.subject[0].digest.sha256 == $digest and
                 (.verificationResult.verifiedTimestamps | length > 0) and
-                .verificationResult.signature.certificate.extensions.DeploymentEnvironment ==
-                  "production" and
-                .verificationResult.signature.certificate.extensions.BuildTrigger ==
+                .verificationResult.signature.certificate.buildTrigger ==
                   "push" and
-                .verificationResult.signature.certificate.extensions.RunnerEnvironment ==
+                .verificationResult.signature.certificate.runnerEnvironment ==
                   "github-hosted" and
-                .verificationResult.signature.certificate.extensions.SourceRepositoryIdentifier ==
+                .verificationResult.signature.certificate.sourceRepositoryIdentifier ==
                   $repository_id
               )
             ' "${verification}" > /dev/null
+
+          python scripts/verify_attestation_certificate.py \
+            --verification "${verification}" \
+            --environment production \
+            --event push \
+            --runner github-hosted \
+            --repository-id "${TRUSTED_REPOSITORY_ID}"
 
       # SBOM строится по immutable digest уже опубликованного образа, а не по
       # рабочей директории или тегу. Поэтому опись включает и Python-пакеты, и
