@@ -529,10 +529,23 @@ event `push`, runner `github-hosted` и repository ID `1199475908`. Новых
 получила 100% трафика. Полный контракт хранится в разделе provenance
 `security/SBOM_RUNBOOK.md`.
 
+Этап 4 завершил эксплуатационный контур. Еженедельный/ручной
+`image-scan.yml` до CVE-анализа проверяет provenance всех traffic/tagged
+revisions с прежней read-only identity. Cloud Run показывает дочерний
+`linux/amd64` manifest (`sha256:498cd37a…5f1a70`), тогда как attestation и SBOM
+относятся к build output — родительскому OCI index
+`sha256:e727018e…3cd9701`. Workflow fail-closed находит ровно один tagged OCI
+index, проверяет точное членство serving manifest в его raw JSON, затем
+проверяет подпись и claims parent index; оба JSON сохраняются на 30 дней.
+Operational run `33391706750` подтвердил эту цепочку. Отдельный CVE-policy для
+нового serving manifest ожидаемо остался `BLOCKED`: Critical=7, High=20,
+VEX=0, waiver=0; runtime evidence при этом `PASS`. Это не ошибка provenance и
+не перенос прежнего VEX на новый digest.
+
 Reviewed VEX для предыдущего `sha256:082760…52fe3` к новому serving digest не
-переносится. Отдельная проверка recurring image-scan для
-`sha256:e613b27e…b5b281` относится к эксплуатационной проверке этапа 4; прежний
-`Gate: PASS` не считается статусом нового образа.
+переносится. Operational run `33391706750` поэтому дал для
+`sha256:498cd37a…5f1a70` отдельный `Gate: BLOCKED`; прежний `Gate: PASS` не
+считается статусом нового образа.
 
 `.github/workflows/image-scan.yml` использует отдельную keyless identity
 `github-image-scanner@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com`.
@@ -651,6 +664,15 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
   тестами. Run `33384972241` для commit `ac1d92f…` проверил keyless attestation,
   создал SBOM и развернул exact `sha256:e727018e…3cd9701` в ревизию
   `insights-api-00048-dff` со 100% трафика.
+- 2026-08-31: этап 4 provenance завершён. Recurring read-only scanner проверяет
+  все traffic/tagged revisions и различает подписанный OCI index от фактически
+  обслуживаемого `linux/amd64` manifest: требует ровно одну exact parent-child
+  связь, затем проверяет keyless attestation parent. Run `33391706750`
+  подтвердил `sha256:e727018e…3cd9701` → `sha256:498cd37a…5f1a70` и provenance
+  `PASS`. Live-негативные проверки отклонили ложный signer, подменённый digest и
+  старый образ без attestation. Следующий CVE gate независимо дал `BLOCKED`
+  (Critical=7, High=20, VEX=0, waiver=0); это отдельная задача разбора нового
+  exact digest, а не незавершённый provenance.
 - 2026-08-29: VEX не используется как эвфемизм для принятого риска. Только
   доказанный `not_affected` живёт в CycloneDX; реальная временная уязвимость —
   в отдельном waiver максимум на 30 дней. Grype 0.117.0 напрямую принимает
