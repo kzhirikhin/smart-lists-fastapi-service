@@ -306,6 +306,85 @@ class TestBuildKitProvenance:
         assert "continue-on-error" not in verify_step
 
 
+class TestGitHubArtifactAttestation:
+    """Exact image подписывается keyless и проверяется до deploy."""
+
+    @pytest.fixture
+    def workflow(self) -> str:
+        return (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
+
+    @pytest.fixture
+    def verify_step(self, workflow: str) -> str:
+        marker = "- name: Verify keyless GitHub artifact attestation"
+        assert marker in workflow
+        return workflow.split(marker, 1)[1].split("\n      - name:", 1)[0]
+
+    def test_job_has_only_required_attestation_permissions(
+        self, workflow: str
+    ) -> None:
+        deploy_job = workflow.split("\n  deploy:\n", 1)[1]
+        permissions = deploy_job.split("\n    steps:\n", 1)[0]
+        assert "contents: read" in permissions
+        assert "id-token: write" in permissions
+        assert "attestations: write" in permissions
+        assert "artifact-metadata: write" in permissions
+        assert "packages: write" not in permissions
+
+    def test_signs_exact_build_output_with_pinned_action(self, workflow: str) -> None:
+        step = workflow.split(
+            "- name: Generate keyless GitHub artifact attestation", 1
+        )[1].split("\n      - name:", 1)[0]
+        assert (
+            "uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d"
+            in step
+        )
+        assert "subject-name: ${{ env.IMAGE }}" in step
+        assert "subject-digest: ${{ steps.build.outputs.digest }}" in step
+        assert "push-to-registry" not in step
+
+    def test_verifies_before_sbom_and_deploy(self, workflow: str) -> None:
+        buildkit = workflow.index("- name: Verify BuildKit provenance")
+        sign = workflow.index("- name: Generate keyless GitHub artifact attestation")
+        verify = workflow.index("- name: Verify keyless GitHub artifact attestation")
+        sbom = workflow.index("- name: Generate and attach CycloneDX SBOM")
+        deploy = workflow.index("- name: Deploy to Cloud Run")
+        assert buildkit < sign < verify < sbom < deploy
+
+    def test_verifier_is_pinned_and_fail_closed(self, verify_step: str) -> None:
+        assert "GH_CLI_VERSION: 2.98.0" in verify_step
+        assert re.search(r"GH_CLI_SHA256:\s*[0-9a-f]{64}", verify_step)
+        assert "sha256sum -c -" in verify_step
+        assert '"${gh_bin}" attestation verify' in verify_step
+        assert '"oci://${IMAGE}@${DIGEST}"' in verify_step
+        assert "ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}" in verify_step
+        assert '[[ -s "${ATTESTATION_BUNDLE}" ]]' in verify_step
+        assert '--bundle "${ATTESTATION_BUNDLE}"' in verify_step
+        assert "--format json" in verify_step
+        assert "continue-on-error" not in verify_step
+
+    def test_enforces_signer_source_and_certificate_claims(
+        self, verify_step: str
+    ) -> None:
+        for flag in (
+            "--repo",
+            "--signer-workflow",
+            "--signer-digest",
+            "--source-ref",
+            "--source-digest",
+            "--predicate-type",
+            "--deny-self-hosted-runners",
+        ):
+            assert flag in verify_step
+        assert '[[ "${GITHUB_EVENT_NAME}" == "push" ]]' in verify_step
+        assert '[[ "${GITHUB_REF}" == "refs/heads/main" ]]' in verify_step
+        assert ".DeploymentEnvironment" in verify_step
+        assert ".BuildTrigger" in verify_step
+        assert ".RunnerEnvironment" in verify_step
+        assert ".SourceRepositoryIdentifier" in verify_step
+        assert 'TRUSTED_REPOSITORY_ID: \'1199475908\'' in verify_step
+        assert ".verifiedTimestamps | length > 0" in verify_step
+
+
 class TestRecurringImageScan:
     """Периодическая проверка смотрит на работающий immutable-артефакт.
 
