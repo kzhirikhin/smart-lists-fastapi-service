@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-30 (генерация BuildKit provenance)
+**Последнее обновление:** 2026-08-31 (keyless GitHub attestation)
 
 **Состояние:** активная разработка
 
@@ -515,10 +515,17 @@ workflow читает exact
 `${IMAGE}@${DIGEST}` через `docker buildx imagetools inspect` и fail-closed
 требует BuildKit build type, непустые materials/LLB и встроенный Dockerfile.
 Аудит подтвердил отсутствие `ARG`, `build-args` и secret inputs, поэтому
-подробный документ не получает чувствительные значения. Это пока только
-metadata сборки: keyless GitHub Artifact Attestation и криптографическая
-проверка signer identity остаются этапом 3. Полный контракт хранится в разделе
-provenance `security/SBOM_RUNBOOK.md`.
+подробный документ не получает чувствительные значения.
+
+Этап 3 подготовлен к production-проверке: `actions/attest` выпускает keyless
+SLSA v1 attestation exact digest через GitHub OIDC/Sigstore, а закреплённый по
+версии и checksum GitHub CLI до SBOM/deploy проверяет trusted root, подпись,
+subject, signer workflow/digest, source ref/digest и запрет self-hosted runner.
+Из уже проверенного X.509 дополнительно требуются Environment `production`,
+event `push`, runner `github-hosted` и repository ID `1199475908`. Новых
+долгоживущих ключей, service account и GCP IAM-прав нет. До первого успешного
+production run контроль считается подготовленным, а не подтверждённым. Полный
+контракт хранится в разделе provenance `security/SBOM_RUNBOOK.md`.
 
 Reviewed VEX для предыдущего `sha256:082760…52fe3` к новому serving digest не
 переносится. Отдельная проверка recurring image-scan для
@@ -630,6 +637,13 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
   внутренний LLB, Dockerfile и точный VCS revision. Статический контракт
   запрещает незаметно добавить `ARG`/build secret inputs без пересмотра риска
   раскрытия. Подписи и проверки GitHub signer identity на этом этапе ещё нет.
+- 2026-08-31: этап 3 provenance подготовлен к production-проверке. Exact build
+  digest подписывается `actions/attest` через GitHub OIDC/Sigstore без
+  долговременного ключа; GitHub CLI 2.98.0 с закреплённым checksum fail-closed
+  проверяет подпись/trusted root, subject, workflow и source identity, а также
+  сертификатные claims `production`, `push`, `github-hosted` и стабильный
+  repository ID. Новая GitHub permission ограничена выпуском attestation;
+  `packages: write`, новая GCP identity и новые GCP-права не добавлены.
 - 2026-08-29: VEX не используется как эвфемизм для принятого риска. Только
   доказанный `not_affected` живёт в CycloneDX; реальная временная уязвимость —
   в отдельном waiver максимум на 30 дней. Grype 0.117.0 напрямую принимает
