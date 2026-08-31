@@ -171,11 +171,22 @@ Provenance не доказывает безопасность кода и зав
 Actions. Проверка в том же deploy job подтверждает целостность выпуска и ловит
 ошибки конфигурации, но не является независимым от GitHub trusted builder.
 
-Критерий завершения всей задачи: production run создаёт новый digest, проверяет
-его подписанную attestation по всем полям выше, прикрепляет SBOM и разворачивает
-в Cloud Run ровно тот же digest. Негативные проверки доказывают отказ при
-подмене digest, repository/workflow и отсутствии attestation. Next.js/Vercel в
-этот контракт не входит: полный финальный runtime artifact нам не принадлежит.
+Критерий завершения всей задачи выполнен 2026-08-31. Production run
+`33384972241` создал OCI index `sha256:e727018e…3cd9701`, проверил его
+подписанную attestation, прикрепил SBOM и развернул в Cloud Run. Платформа
+импортировала из него exact `linux/amd64` manifest
+`sha256:498cd37a…5f1a70`. Recurring run `33391706750` потребовал ровно один
+tagged parent index, проверил raw OCI membership child → parent, затем подпись и
+claims parent; provenance step прошёл. Live-негативные проверки вернули отказ
+для подменённого digest, ложного signer workflow и старого образа без
+attestation. Next.js/Vercel в этот контракт не входит: полный финальный runtime
+artifact нам не принадлежит.
+
+Общий operational job после provenance продолжает независимые runtime/CVE
+проверки. Поэтому run `33391706750` в целом красный: runtime evidence нового
+serving manifest — `PASS`, но CVE policy — `BLOCKED` (Critical=7, High=20,
+VEX=0, waiver=0). Это не отменяет provenance `PASS` и не разрешает переносить
+VEX предыдущего digest; уязвимости нового exact manifest разбираются отдельно.
 
 На production digest
 `sha256:0827603eeb37e4f31ef2486eb0de757850e2dea548a47aa7497e06b0b1752fe3`
