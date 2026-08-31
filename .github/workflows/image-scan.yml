@@ -142,7 +142,60 @@ jobs:
             echo "::error::Список image digest оказался пустым"
             exit 1
           fi
+
+          # Cloud Run импортирует выбранный linux/amd64 manifest из OCI index и
+          # показывает в revision уже дочерний digest. Attestation относится к
+          # исходному index из build output. Находим ровно один tagged index,
+          # который криптографически по digest включает каждый serving manifest.
+          registry_json="${RUNNER_TEMP}/artifact-registry-images.json"
+          gcloud artifacts docker images list "${IMAGE}" \
+            --include-tags \
+            --format=json > "${registry_json}"
+          mapfile -t parent_digests < <(
+            jq -r '
+              .[]
+              | select(.metadata.mediaType == "application/vnd.oci.image.index.v1+json")
+              | select((.tags // []) | length > 0)
+              | .version
+            ' "${registry_json}" | sort -u
+          )
+          if (( ${#parent_digests[@]} == 0 )); then
+            echo "::error::Artifact Registry не вернул ни одного tagged OCI index"
+            exit 1
+          fi
+
+          provenance_targets="${RUNNER_TEMP}/cloud-run-provenance-targets.tsv"
+          : > "${provenance_targets}"
+          while IFS= read -r image_ref; do
+            child_digest="${image_ref##*@}"
+            matches=()
+            for parent_digest in "${parent_digests[@]}"; do
+              index_json="${RUNNER_TEMP}/oci-index-${parent_digest#sha256:}.json"
+              docker buildx imagetools inspect "${IMAGE}@${parent_digest}" \
+                --raw > "${index_json}"
+              if jq -e --arg child "${child_digest}" '
+                .mediaType == "application/vnd.oci.image.index.v1+json" and
+                any(.manifests[];
+                  .digest == $child and
+                  .platform.os == "linux" and
+                  .platform.architecture == "amd64"
+                )
+              ' "${index_json}" > /dev/null; then
+                matches+=("${parent_digest}")
+                cp "${index_json}" \
+                  "${reports_dir}/provenance-link-${child_digest#sha256:}-${parent_digest#sha256:}.json"
+              fi
+            done
+            if (( ${#matches[@]} != 1 )); then
+              echo "::error::Для serving ${child_digest} найдено OCI parent index: ${#matches[@]}, ожидался ровно один"
+              exit 1
+            fi
+            printf '%s\t%s@%s\n' "${image_ref}" "${IMAGE}" "${matches[0]}" \
+              >> "${provenance_targets}"
+          done < "${targets_file}"
+
           echo "targets_file=${targets_file}" >> "${GITHUB_OUTPUT}"
+          echo "provenance_targets=${provenance_targets}" >> "${GITHUB_OUTPUT}"
           echo "reports_dir=${reports_dir}" >> "${GITHUB_OUTPUT}"
 
       # Deploy-time gate защищает момент выкладки, а эта проверка повторно
@@ -164,10 +217,11 @@ jobs:
           gh_bin="${RUNNER_TEMP}/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh"
           [[ "$("${gh_bin}" --version | head -n 1)" == "gh version ${GH_CLI_VERSION} (2026-08-20)" ]]
 
-          while IFS= read -r image_ref; do
-            digest="${image_ref##*@}"
-            verification="${{ steps.targets.outputs.reports_dir }}/provenance-${digest#sha256:}.json"
-            "${gh_bin}" attestation verify "oci://${image_ref}" \
+          while IFS=$'\t' read -r serving_ref provenance_ref; do
+            serving_digest="${serving_ref##*@}"
+            provenance_digest="${provenance_ref##*@}"
+            verification="${{ steps.targets.outputs.reports_dir }}/provenance-${provenance_digest#sha256:}.json"
+            "${gh_bin}" attestation verify "oci://${provenance_ref}" \
               --repo "${GITHUB_REPOSITORY}" \
               --signer-workflow "${TRUSTED_WORKFLOW}" \
               --source-ref "refs/heads/main" \
@@ -177,7 +231,7 @@ jobs:
 
             jq -e \
               --arg image "${IMAGE}" \
-              --arg digest "${digest#sha256:}" \
+              --arg digest "${provenance_digest#sha256:}" \
               --arg repository_id "${TRUSTED_REPOSITORY_ID}" \
               '
                 length == 1 and
@@ -203,8 +257,10 @@ jobs:
               --runner github-hosted \
               --repository-id "${TRUSTED_REPOSITORY_ID}"
             printf -- '### Provenance — `%s`\n\n- Attestation: **PASS**\n- Signer: `%s` from `refs/heads/main`\n\n' \
-              "${digest}" "${TRUSTED_WORKFLOW}" >> "${GITHUB_STEP_SUMMARY}"
-          done < "${{ steps.targets.outputs.targets_file }}"
+              "${provenance_digest}" "${TRUSTED_WORKFLOW}" >> "${GITHUB_STEP_SUMMARY}"
+            printf -- '- Serving manifest: `%s` (linux/amd64 member of the signed OCI index)\n\n' \
+              "${serving_digest}" >> "${GITHUB_STEP_SUMMARY}"
+          done < "${{ steps.targets.outputs.provenance_targets }}"
 
       # Проверяем все обслуживающие digest, даже если первый уже уязвим.
       # Контейнер не запускается: inspect/create/export дают конфигурацию и
