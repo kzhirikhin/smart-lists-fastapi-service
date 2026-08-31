@@ -448,6 +448,14 @@ class TestRecurringImageScan:
         assert ".tag != null" in workflow
         assert 'prefix="${IMAGE}@sha256:"' in workflow
         assert "^[0-9a-f]{64}$" in workflow
+        assert "gcloud artifacts docker images list" in workflow
+        assert 'select((.tags // []) | length > 0)' in workflow
+        assert 'docker buildx imagetools inspect "${IMAGE}@${parent_digest}"' in workflow
+        assert '.digest == $child' in workflow
+        assert '.platform.os == "linux"' in workflow
+        assert '.platform.architecture == "amd64"' in workflow
+        assert 'if (( ${#matches[@]} != 1 ))' in workflow
+        assert "provenance_targets=${provenance_targets}" in workflow
 
     def test_verifies_provenance_for_every_serving_digest(
         self, workflow: str
@@ -458,8 +466,8 @@ class TestRecurringImageScan:
         assert resolve < verify < scan
 
         step = workflow[verify:scan]
-        assert 'while IFS= read -r image_ref' in step
-        assert '"${gh_bin}" attestation verify "oci://${image_ref}"' in step
+        assert "while IFS=$'\\t' read -r serving_ref provenance_ref" in step
+        assert '"${gh_bin}" attestation verify "oci://${provenance_ref}"' in step
         assert '--repo "${GITHUB_REPOSITORY}"' in step
         assert '--signer-workflow "${TRUSTED_WORKFLOW}"' in step
         assert '--source-ref "refs/heads/main"' in step
@@ -470,6 +478,8 @@ class TestRecurringImageScan:
         assert "--event push" in step
         assert "--runner github-hosted" in step
         assert '--repository-id "${TRUSTED_REPOSITORY_ID}"' in step
+        assert "serving_digest=\"${serving_ref##*@}\"" in step
+        assert "provenance_digest=\"${provenance_ref##*@}\"" in step
         assert "continue-on-error" not in step
 
     def test_recurring_verifier_is_pinned_and_checks_exact_subject(
@@ -538,4 +548,5 @@ class TestRecurringImageScan:
         assert "${report_prefix}-raw.json" in workflow
         assert "${report_prefix}-policy.json" in workflow
         assert "${report_prefix}-evidence.json" in workflow
-        assert "provenance-${digest#sha256:}.json" in workflow
+        assert "provenance-${provenance_digest#sha256:}.json" in workflow
+        assert "provenance-link-${child_digest#sha256:}-${parent_digest#sha256:}.json" in workflow
