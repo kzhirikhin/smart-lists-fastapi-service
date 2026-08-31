@@ -101,10 +101,19 @@ DNS-print функций, формат `%mc` с явной шириной бол
 
 ## Контракт будущего provenance
 
-BuildKit SLSA v1 provenance `mode=max` и его структурная проверка реализуются
-этапом 2; до production run статус остаётся непроверенным. Подписанная GitHub
-attestation и проверка signer identity относятся к следующему этапу и пока не
-действуют.
+BuildKit SLSA v1 provenance `mode=max` и его структурная проверка реализованы
+и подтверждены production run `33312038124`. Для commit `82af491…` Registry
+вернул подробный документ exact digest `sha256:e613b27e…b5b281`: BuildKit build
+type, resolved dependencies, внутренний LLB, Dockerfile и тот же VCS revision.
+Gate прошёл до SBOM и deploy, после чего Cloud Run ревизия
+`insights-api-00047-hff` получила 100% трафика на этот digest. Подписанная
+GitHub attestation и проверка signer identity относятся к следующему этапу и
+пока не действуют.
+
+Exact VEX предыдущего `sha256:082760…52fe3` к новому digest не применяется.
+Recurring image-scan для `sha256:e613b27e…b5b281` и сверка эксплуатационного
+контура выполняются на этапе 4; historical `Gate: PASS` старого образа не
+переносится автоматически.
 
 Для каждого нового production digest должно быть криптографически проверяемо,
 что образ:

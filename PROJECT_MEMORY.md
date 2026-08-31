@@ -506,9 +506,12 @@ Ruleset `Protect main` выровнен с web-репозиторием 2026-08-
 - Cloud Run service `insights-api` в `us-central1` разворачивается по digest
   собранного образа, с явными `--service-account` и `--port 8000`.
 
-BuildKit provenance включён как SLSA v1 `mode=max`; production-подтверждение
-нового
-digest ожидается после merge. До SBOM и Cloud Run workflow читает exact
+BuildKit provenance включён как SLSA v1 `mode=max`. Production run
+`33312038124` успешно собрал commit
+`82af49199223f1b2b7c5821d732b5e801bc65539`, проверил metadata и развернул
+`sha256:e613b27e…b5b281` в ревизию `insights-api-00047-hff`; независимая проверка
+Cloud Run подтвердила 100% трафика на тот же digest. До SBOM и Cloud Run
+workflow читает exact
 `${IMAGE}@${DIGEST}` через `docker buildx imagetools inspect` и fail-closed
 требует BuildKit build type, непустые materials/LLB и встроенный Dockerfile.
 Аудит подтвердил отсутствие `ARG`, `build-args` и secret inputs, поэтому
@@ -516,6 +519,11 @@ digest ожидается после merge. До SBOM и Cloud Run workflow чи
 metadata сборки: keyless GitHub Artifact Attestation и криптографическая
 проверка signer identity остаются этапом 3. Полный контракт хранится в разделе
 provenance `security/SBOM_RUNBOOK.md`.
+
+Reviewed VEX для предыдущего `sha256:082760…52fe3` к новому serving digest не
+переносится. Отдельная проверка recurring image-scan для
+`sha256:e613b27e…b5b281` относится к эксплуатационной проверке этапа 4; прежний
+`Gate: PASS` не считается статусом нового образа.
 
 `.github/workflows/image-scan.yml` использует отдельную keyless identity
 `github-image-scanner@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com`.
@@ -606,19 +614,22 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
   digest, и старое exact-исключение на него не переносится. Dependency-Track,
   Next.js/Vercel SBOM и provenance в контур не входят; триггеры пересмотра
   зафиксированы в `security/SBOM_RUNBOOK.md`.
-- 2026-08-30: для отдельной задачи provenance определён контракт, но контроль
-  ещё не реализован. Production-образ должен иметь BuildKit SLSA provenance
-  `mode=max` и keyless GitHub Artifact Attestation exact digest. Доверенная
+- 2026-08-30: для отдельной задачи provenance определён контракт; BuildKit
+  metadata реализована этапом 2, но полный криптографический контроль ещё нет.
+  Production-образ должен иметь BuildKit SLSA provenance `mode=max` и keyless
+  GitHub Artifact Attestation exact digest. Доверенная
   identity ограничена репозиторием, `deploy.yml`, `push` в `main`, Environment
   `production` и текущим commit SHA; проверка до Cloud Run deploy fail-closed.
   Долгоживущего signing key и отдельной service account не будет. Next.js/Vercel
   остаётся вне контура, поскольку полный финальный artifact нам не принадлежит.
-- 2026-08-30: этап 2 provenance реализован в deploy workflow, production run
-  ожидается после merge. `docker/build-push-action` выпускает BuildKit SLSA
-  v1 `mode=max`; отдельный fail-closed шаг проверяет подробный документ exact
-  digest до SBOM и Cloud Run. Статический контракт запрещает незаметно добавить
-  `ARG`/build secret inputs без пересмотра риска раскрытия. Подписи и проверки
-  GitHub signer identity на этом этапе ещё нет.
+- 2026-08-30: этап 2 provenance реализован и проверен в production. Run
+  `33312038124` выпустил для commit `82af491…` BuildKit SLSA v1 `mode=max`,
+  structural gate проверил exact `sha256:e613b27e…b5b281` до SBOM и Cloud Run,
+  а ревизия `insights-api-00047-hff` получила 100% трафика на тот же digest.
+  Registry-документ содержит BuildKit build type, resolved dependencies,
+  внутренний LLB, Dockerfile и точный VCS revision. Статический контракт
+  запрещает незаметно добавить `ARG`/build secret inputs без пересмотра риска
+  раскрытия. Подписи и проверки GitHub signer identity на этом этапе ещё нет.
 - 2026-08-29: VEX не используется как эвфемизм для принятого риска. Только
   доказанный `not_affected` живёт в CycloneDX; реальная временная уязвимость —
   в отдельном waiver максимум на 30 дней. Grype 0.117.0 напрямую принимает
