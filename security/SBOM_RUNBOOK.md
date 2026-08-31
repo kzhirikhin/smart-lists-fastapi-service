@@ -108,14 +108,21 @@ type, resolved dependencies, внутренний LLB, Dockerfile и тот же
 Gate прошёл до SBOM и deploy, после чего Cloud Run ревизия
 `insights-api-00047-hff` получила 100% трафика на этот digest.
 
-Этап 3 подготовлен, но до первого production run ещё не подтверждён.
+Этап 3 реализован и подтверждён production run `33384972241`.
 `actions/attest` выпускает keyless GitHub attestation exact digest через
 OIDC/Sigstore. GitHub CLI 2.98.0 с закреплённым release checksum проверяет
 локальный bundle по Sigstore trusted root: subject, signer workflow/digest,
 source ref/digest, SLSA v1 predicate и запрет self-hosted runner. Из
 криптографически проверенного X.509 дополнительно требуются deployment
 Environment `production`, trigger `push`, runner `github-hosted` и стабильный
-repository ID `1199475908`. Проверка выполняется до SBOM и Cloud Run.
+repository ID `1199475908`. Проверка выполняется до SBOM и Cloud Run. Для
+commit `ac1d92f…` она прошла на exact `sha256:e727018e…3cd9701`, после чего тот
+же digest получил CycloneDX SBOM и был развёрнут в ревизию
+`insights-api-00048-dff` со 100% трафика. Независимый `gh attestation verify`
+подтвердил subject, signer/source SHA, `refs/heads/main`, `push`,
+`github-hosted`, repository ID и запись Transparency Log. Первый run
+`33384270596` показал fail-closed поведение: ошибка чтения сертификатных claims
+остановила процесс до SBOM и deploy; production оставался на прежней ревизии.
 
 Exact VEX предыдущего `sha256:082760…52fe3` к новому digest не применяется.
 Recurring image-scan для `sha256:e613b27e…b5b281` и сверка эксплуатационного
