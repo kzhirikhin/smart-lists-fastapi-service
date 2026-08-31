@@ -15,6 +15,7 @@ on:
       - security/vex/**
       - security/waivers.json
       - scripts/evaluate_image_scan.py
+      - scripts/verify_attestation_certificate.py
       - scripts/verify_image_evidence.py
       - .github/workflows/image-scan.yml
 
@@ -33,6 +34,11 @@ env:
   SERVICE: insights-api
   IMAGE: us-central1-docker.pkg.dev/project-5b7c1bd1-572b-410d-826/smart-lists/insights-api
   SCANNER_SA: github-image-scanner@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com
+  TRUSTED_WORKFLOW: kzhirikhin/smart-lists-fastapi-service/.github/workflows/deploy.yml
+  TRUSTED_REPOSITORY_ID: '1199475908'
+  GH_CLI_VERSION: 2.98.0
+  # SHA-256 из официального gh_2.98.0_checksums.txt.
+  GH_CLI_SHA256: 3b8ac6b30336802fc1a858d7c084e11cdf24ac1a761ca90b68022d7d729208de
   GRYPE_VERSION: 0.117.0
   # SHA-256 из официального grype_0.117.0_checksums.txt.
   GRYPE_SHA256: 38525dab1e06f162ebaa02f94d82d1f807076b011a44180cf2777edf1a7b9c26
@@ -46,6 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      attestations: read
       id-token: write
 
     steps:
@@ -137,6 +144,67 @@ jobs:
           fi
           echo "targets_file=${targets_file}" >> "${GITHUB_OUTPUT}"
           echo "reports_dir=${reports_dir}" >> "${GITHUB_OUTPUT}"
+
+      # Deploy-time gate защищает момент выкладки, а эта проверка повторно
+      # подтверждает происхождение каждой реально доступной Cloud Run revision.
+      # Source SHA здесь намеренно не равен SHA текущего scan-run: serving image
+      # мог быть собран более ранним push. Его ref, signer workflow и все
+      # защищённые сертификатом claims при этом обязаны оставаться точными.
+      - name: Verify provenance of every serving digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL \
+            "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz" \
+            -o "${archive}"
+          echo "${GH_CLI_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}"
+          gh_bin="${RUNNER_TEMP}/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh"
+          [[ "$("${gh_bin}" --version | head -n 1)" == "gh version ${GH_CLI_VERSION} (2026-08-20)" ]]
+
+          while IFS= read -r image_ref; do
+            digest="${image_ref##*@}"
+            verification="${{ steps.targets.outputs.reports_dir }}/provenance-${digest#sha256:}.json"
+            "${gh_bin}" attestation verify "oci://${image_ref}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${TRUSTED_WORKFLOW}" \
+              --source-ref "refs/heads/main" \
+              --predicate-type "https://slsa.dev/provenance/v1" \
+              --deny-self-hosted-runners \
+              --format json > "${verification}"
+
+            jq -e \
+              --arg image "${IMAGE}" \
+              --arg digest "${digest#sha256:}" \
+              --arg repository_id "${TRUSTED_REPOSITORY_ID}" \
+              '
+                length == 1 and
+                all(.[];
+                  .verificationResult.statement.predicateType ==
+                    "https://slsa.dev/provenance/v1" and
+                  (.verificationResult.statement.subject | length == 1) and
+                  .verificationResult.statement.subject[0].name == $image and
+                  .verificationResult.statement.subject[0].digest.sha256 == $digest and
+                  (.verificationResult.verifiedTimestamps | length > 0) and
+                  .verificationResult.signature.certificate.buildTrigger == "push" and
+                  .verificationResult.signature.certificate.runnerEnvironment ==
+                    "github-hosted" and
+                  .verificationResult.signature.certificate.sourceRepositoryIdentifier ==
+                    $repository_id
+                )
+              ' "${verification}" > /dev/null
+
+            python scripts/verify_attestation_certificate.py \
+              --verification "${verification}" \
+              --environment production \
+              --event push \
+              --runner github-hosted \
+              --repository-id "${TRUSTED_REPOSITORY_ID}"
+            printf -- '### Provenance — `%s`\n\n- Attestation: **PASS**\n- Signer: `%s` from `refs/heads/main`\n\n' \
+              "${digest}" "${TRUSTED_WORKFLOW}" >> "${GITHUB_STEP_SUMMARY}"
+          done < "${{ steps.targets.outputs.targets_file }}"
 
       # Проверяем все обслуживающие digest, даже если первый уже уязвим.
       # Контейнер не запускается: inspect/create/export дают конфигурацию и
@@ -243,7 +311,7 @@ jobs:
           done < "${{ steps.targets.outputs.targets_file }}"
           exit "${failed}"
 
-      # JSON Grype, policy и runtime evidence сохраняются и при красном gate:
+      # JSON provenance, Grype, policy и runtime evidence сохраняются и при красном gate:
       # это данные для разбора, а не архив удалённых образов. Короткий retention
       # не подменяет историю SBOM.
       - name: Upload image scan reports

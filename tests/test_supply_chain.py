@@ -425,10 +425,16 @@ class TestRecurringImageScan:
         for path in policy_paths:
             assert f"- {path}" in workflow
             assert f"- {path}" in deploy
+        assert "- scripts/verify_attestation_certificate.py" in workflow
+        # Этот verifier используется самим deploy: его изменение должно пройти
+        # новый production gate, а не считаться policy-only документацией.
+        assert "- scripts/verify_attestation_certificate.py" not in deploy
 
     def test_uses_dedicated_read_only_identity(self, workflow: str) -> None:
         assert "github-image-scanner@" in workflow
         assert "service_account: ${{ env.SCANNER_SA }}" in workflow
+        assert "attestations: read" in workflow
+        assert "attestations: write" not in workflow
         assert "service_account: github-deployer@" not in workflow
         assert "gcloud run deploy" not in workflow
         assert "docker/build-push-action" not in workflow
@@ -442,6 +448,46 @@ class TestRecurringImageScan:
         assert ".tag != null" in workflow
         assert 'prefix="${IMAGE}@sha256:"' in workflow
         assert "^[0-9a-f]{64}$" in workflow
+
+    def test_verifies_provenance_for_every_serving_digest(
+        self, workflow: str
+    ) -> None:
+        resolve = workflow.index("- name: Resolve serving image digests")
+        verify = workflow.index("- name: Verify provenance of every serving digest")
+        scan = workflow.index("- name: Scan every serving digest")
+        assert resolve < verify < scan
+
+        step = workflow[verify:scan]
+        assert 'while IFS= read -r image_ref' in step
+        assert '"${gh_bin}" attestation verify "oci://${image_ref}"' in step
+        assert '--repo "${GITHUB_REPOSITORY}"' in step
+        assert '--signer-workflow "${TRUSTED_WORKFLOW}"' in step
+        assert '--source-ref "refs/heads/main"' in step
+        assert '--predicate-type "https://slsa.dev/provenance/v1"' in step
+        assert "--deny-self-hosted-runners" in step
+        assert "python scripts/verify_attestation_certificate.py" in step
+        assert "--environment production" in step
+        assert "--event push" in step
+        assert "--runner github-hosted" in step
+        assert '--repository-id "${TRUSTED_REPOSITORY_ID}"' in step
+        assert "continue-on-error" not in step
+
+    def test_recurring_verifier_is_pinned_and_checks_exact_subject(
+        self, workflow: str
+    ) -> None:
+        assert "GH_CLI_VERSION: 2.98.0" in workflow
+        assert re.search(r"GH_CLI_SHA256:\s*[0-9a-f]{64}", workflow)
+        assert "sha256sum -c -" in workflow
+        assert 'TRUSTED_REPOSITORY_ID: \'1199475908\'' in workflow
+        assert (
+            "TRUSTED_WORKFLOW: "
+            "kzhirikhin/smart-lists-fastapi-service/.github/workflows/deploy.yml"
+            in workflow
+        )
+        assert ".statement.subject[0].name == $image" in workflow
+        assert ".statement.subject[0].digest.sha256 == $digest" in workflow
+        assert ".verifiedTimestamps | length > 0" in workflow
+        assert "${report_prefix}-provenance.json" not in workflow
 
     def test_scan_is_fail_closed_for_high_and_critical(self, workflow: str) -> None:
         payload = "\n".join(
@@ -492,3 +538,4 @@ class TestRecurringImageScan:
         assert "${report_prefix}-raw.json" in workflow
         assert "${report_prefix}-policy.json" in workflow
         assert "${report_prefix}-evidence.json" in workflow
+        assert "provenance-${digest#sha256:}.json" in workflow
