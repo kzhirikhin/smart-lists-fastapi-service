@@ -541,9 +541,10 @@ Operational run `33391706750` подтвердил эту цепочку. В с�
 CVE-policy нового serving manifest заблокировал Critical=7 и High=20 при VEX=0
 и waiver=0; runtime evidence при этом прошёл. Последующий review PR №52 сверил
 все 21 CVE с актуальными Debian advisory и exact evidence этого digest. Новый
-CycloneDX VEX содержит 27 точных statements; локальный штатный evaluator дал
-VEX=27, waiver=0, остаток Critical=0/High=0 и `Gate: PASS`. До post-merge
-operational проверки run `33391706750` остаётся последним внешним результатом.
+CycloneDX VEX содержит 27 точных statements. Post-merge operational run
+`33498396730` повторно подтвердил provenance parent index, exact runtime
+evidence 22/22 и 21/21 claims; policy получил Critical=7/High=20 до VEX,
+подавил VEX=27 при waiver=0 и завершился с Critical=0/High=0, `Gate: PASS`.
 
 Reviewed VEX для предыдущего `sha256:082760…52fe3` к новому serving digest не
 переносится. Для `sha256:498cd37a…5f1a70` создан отдельный VEX в PR №52 после

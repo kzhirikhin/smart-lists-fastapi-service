@@ -192,8 +192,9 @@ serving manifest — `PASS`, но на момент запуска CVE policy б
 advisory и с runtime evidence именно `sha256:498cd37a…5f1a70`. Новый CycloneDX
 VEX содержит 27 exact statements; локальный штатный evaluator получил
 Critical=7 и High=20 до политики, подавил VEX=27, waiver=0 и дал `Gate: PASS`.
-Это ещё не заменяет post-merge operational run: до его выполнения последним
-внешним результатом остаётся красный run `33391706750`.
+Post-merge operational run `33498396730` подтвердил тот же результат на
+фактически обслуживающем digest: provenance и runtime evidence прошли,
+Critical=0/High=0 после VEX, итоговый `Gate: PASS`.
 
 На production digest
 `sha256:0827603eeb37e4f31ef2486eb0de757850e2dea548a47aa7497e06b0b1752fe3`
