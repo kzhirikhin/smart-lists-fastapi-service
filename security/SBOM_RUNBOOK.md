@@ -184,9 +184,16 @@ artifact нам не принадлежит.
 
 Общий operational job после provenance продолжает независимые runtime/CVE
 проверки. Поэтому run `33391706750` в целом красный: runtime evidence нового
-serving manifest — `PASS`, но CVE policy — `BLOCKED` (Critical=7, High=20,
-VEX=0, waiver=0). Это не отменяет provenance `PASS` и не разрешает переносить
-VEX предыдущего digest; уязвимости нового exact manifest разбираются отдельно.
+serving manifest — `PASS`, но на момент запуска CVE policy был `BLOCKED`
+(Critical=7, High=20, VEX=0, waiver=0). Это не отменяет provenance `PASS` и не
+разрешает переносить VEX предыдущего digest.
+
+Отдельный review в PR №52 повторно сверил все 21 CVE с актуальными Debian
+advisory и с runtime evidence именно `sha256:498cd37a…5f1a70`. Новый CycloneDX
+VEX содержит 27 exact statements; локальный штатный evaluator получил
+Critical=7 и High=20 до политики, подавил VEX=27, waiver=0 и дал `Gate: PASS`.
+Это ещё не заменяет post-merge operational run: до его выполнения последним
+внешним результатом остаётся красный run `33391706750`.
 
 На production digest
 `sha256:0827603eeb37e4f31ef2486eb0de757850e2dea548a47aa7497e06b0b1752fe3`
