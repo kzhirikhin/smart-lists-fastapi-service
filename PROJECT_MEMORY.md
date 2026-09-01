@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-09-01 (cleanup policy реестра образов)
+**Последнее обновление:** 2026-09-01 (reviewed VEX нового production digest)
 
 **Состояние:** активная разработка
 
@@ -537,15 +537,18 @@ revisions с прежней read-only identity. Cloud Run показывает �
 `sha256:e727018e…3cd9701`. Workflow fail-closed находит ровно один tagged OCI
 index, проверяет точное членство serving manifest в его raw JSON, затем
 проверяет подпись и claims parent index; оба JSON сохраняются на 30 дней.
-Operational run `33391706750` подтвердил эту цепочку. Отдельный CVE-policy для
-нового serving manifest ожидаемо остался `BLOCKED`: Critical=7, High=20,
-VEX=0, waiver=0; runtime evidence при этом `PASS`. Это не ошибка provenance и
-не перенос прежнего VEX на новый digest.
+Operational run `33391706750` подтвердил эту цепочку. В самом run отдельный
+CVE-policy нового serving manifest заблокировал Critical=7 и High=20 при VEX=0
+и waiver=0; runtime evidence при этом прошёл. Последующий review PR №52 сверил
+все 21 CVE с актуальными Debian advisory и exact evidence этого digest. Новый
+CycloneDX VEX содержит 27 точных statements; локальный штатный evaluator дал
+VEX=27, waiver=0, остаток Critical=0/High=0 и `Gate: PASS`. До post-merge
+operational проверки run `33391706750` остаётся последним внешним результатом.
 
 Reviewed VEX для предыдущего `sha256:082760…52fe3` к новому serving digest не
-переносится. Operational run `33391706750` поэтому дал для
-`sha256:498cd37a…5f1a70` отдельный `Gate: BLOCKED`; прежний `Gate: PASS` не
-считается статусом нового образа.
+переносится. Для `sha256:498cd37a…5f1a70` создан отдельный VEX в PR №52 после
+нового review exact rootfs и advisory; его statements не применяются ни к
+предыдущему, ни к следующему digest.
 
 `.github/workflows/image-scan.yml` использует отдельную keyless identity
 `github-image-scanner@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com`.
