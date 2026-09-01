@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-08-31 (keyless GitHub attestation)
+**Последнее обновление:** 2026-09-01 (cleanup policy реестра образов)
 
 **Состояние:** активная разработка
 
@@ -614,8 +614,73 @@ Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитор
 произвольный образ на машину разработчика. Активный production pipeline
 использует Artifact Registry и GHCR не трогает.
 
+### Retention образов в Artifact Registry
+
+Cleanup policy репозитория `smart-lists` состоит из трёх правил: KEEP 20 самых
+новых версий, KEEP всё моложе 30 дней, DELETE всё старше. С 2026-09-01 она
+работает боевым режимом; до этого дня стоял `cleanupPolicyDryRun`, при котором
+policy только писала `BatchDeleteVersions` в audit log и ничего не удаляла.
+
+`keepCount` считает **версии пакета, а не образы**. Один deploy создаёт 3–4
+версии: OCI index, дочерний `linux/amd64` manifest, attestation и SBOM —
+attachment занимает собственную версию, и её видно в поле `ociVersionName`.
+Поэтому 20 — это примерно пять последних выкладок, а не двадцать; прежнее
+значение 10 давало около двух с половиной и было выбрано в расчёте на образы.
+
+Значение важно не только для глубины отката. Пока выкладки идут чаще раза в
+месяц, работающий образ удерживает `keep-fresh`; при паузе дольше 30 дней
+единственным, что оставляет его в реестре, остаётся `keepCount`.
+
+Удаление версии необратимо уносит её SBOM и attestation: отдельного архива нет
+по построению — см. `security/SBOM_RUNBOOK.md`. На `image-scan.yml` это не
+влияет: он берёт только traffic/tagged revisions, а их образы всегда свежие.
+
+Policy применяется вручную, CI её не накатывает. Флагов cleanup-policy в
+`gcloud artifacts repositories update` нет (проверено на 581.0.0), поэтому
+единственный путь — REST:
+
+```bash
+curl -X PATCH \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Content-Type: application/json" \
+  --data @cleanup-policy.json \
+  "https://artifactregistry.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/repositories/${REPOSITORY}?updateMask=cleanupPolicies,cleanupPolicyDryRun"
+```
+
+```json
+{
+  "cleanupPolicies": {
+    "keep-recent-versions": {
+      "id": "keep-recent-versions",
+      "action": "KEEP",
+      "mostRecentVersions": { "keepCount": 20 }
+    },
+    "keep-fresh": {
+      "id": "keep-fresh",
+      "action": "KEEP",
+      "condition": { "newerThan": "2592000s", "tagState": "TAG_STATE_UNSPECIFIED" }
+    },
+    "delete-stale": {
+      "id": "delete-stale",
+      "action": "DELETE",
+      "condition": { "olderThan": "2592000s", "tagState": "TAG_STATE_UNSPECIFIED" }
+    }
+  },
+  "cleanupPolicyDryRun": false
+}
+```
+
 ## Важные решения
 
+- 2026-09-01: cleanup policy реестра выведена из dry-run, `keepCount` поднят
+  с 10 до 20. Причина не в объёме, а в единице измерения: `keepCount` считает
+  версии пакета, а SBOM и attestation занимают версии наравне с образом, из-за
+  чего «10 последних версий» означали около двух с половиной выкладок. Порог
+  выбран так, чтобы при паузе в деплоях дольше 30 дней в реестре гарантированно
+  оставалось около пяти последних выкладок и при этом репозиторий укладывался
+  в бесплатные 0,5 GB. Policy остаётся ручной внешней настройкой: CI её не
+  накатывает и тестом она не закреплена — это осознанный остаток, записанный
+  как A73 в `THREAT_MODEL.md` репозитория `smart-lists`.
 - 2026-08-30: для production digest `sha256:082760…52fe3` после сверки exact
   Grype match, официальных Debian advisory и runtime evidence reviewed VEX
   покрывает 21 CVE / 27 package match. Он не утверждает, что версии пакетов
