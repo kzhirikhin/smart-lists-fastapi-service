@@ -389,10 +389,11 @@ Bruno collection содержит ручные запросы. Её `secret` —
 pytest tests/ -v
 ```
 
-Сейчас прогон даёт 144 проверки: 47 в `tests/test_insights.py`, включая два
-параметризованных теста бюджетов, 6 в `tests/test_anthropic_auth.py`, 13 в
-`tests/test_scan_policy.py`, 52 в `tests/test_supply_chain.py` и 26 в
-`tests/test_image_evidence.py`.
+Сейчас прогон даёт 180 проверок: 67 в `tests/test_supply_chain.py`, 47 в
+`tests/test_insights.py`, включая два параметризованных теста бюджетов, 31 в
+`tests/test_image_evidence.py`, 14 в `tests/test_scan_policy.py`, 8 в
+`tests/test_attestation_certificate.py`, 7 в `tests/test_outbound_calls.py` и 6
+в `tests/test_anthropic_auth.py`.
 
 `test_supply_chain.py` — статические контракты цепочки поставок, аналог набора
 `security-static` из web-репозитория. Отдельного gate здесь нет, поэтому они
@@ -405,6 +406,14 @@ policy evaluator, offline runtime evidence без `docker run` и раздель
 сохранение raw/policy/evidence отчётов. Базовые
 утверждения были истинны и до появления тестов — закрепляется не их появление,
 а то, что они не станут ложными молча.
+
+`test_outbound_calls.py` (2026-09-01) той же формой закрывает A56: обходит
+`app` и требует, чтобы каждый сетевой вызов лежал в allowlist с причиной —
+`requests`, `httpx`, `urllib`, `aiohttp`, `socket`, конструктор клиента
+Anthropic, транспорт google-auth и `verify_oauth2_token`. Раньше закреплены
+были адреса трёх существующих вызовов, но не их число, поэтому четвёртый вызов
+с адресом из окружения прогон бы не покрасил. Зеркало `outbound-requests.test.ts`
+из web-репозитория.
 
 Покрыты:
 
