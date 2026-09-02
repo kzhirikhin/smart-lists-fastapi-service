@@ -44,6 +44,60 @@ def _action_refs() -> list[tuple[str, str, str]]:
     return refs
 
 
+def _trigger_paths(workflow: str, key: str) -> list[str]:
+    """Список путей под `paths:`/`paths-ignore:` конкретного workflow."""
+    lines = (WORKFLOWS_DIR / workflow).read_text(encoding="utf-8").splitlines()
+    paths: list[str] = []
+    depth: int | None = None
+    for line in lines:
+        stripped = line.strip()
+        if depth is None:
+            if stripped == f"{key}:":
+                depth = len(line) - len(line.lstrip())
+            continue
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not stripped.startswith("- ") or len(line) - len(line.lstrip()) <= depth:
+            break
+        paths.append(stripped[2:].strip())
+    return paths
+
+
+def _image_inputs() -> list[str]:
+    """Источники `COPY`, которые Dockerfile берёт из контекста сборки.
+
+    Это и есть определение «влияет на образ»: всё, что не приезжает сюда,
+    в собранный артефакт не попадает. Список читается из Dockerfile, поэтому
+    новый `COPY` расширяет требование сам, без правки теста.
+    """
+    body = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    sources: list[str] = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped.upper().startswith("COPY "):
+            continue
+        tokens = stripped.split()[1:]
+        if any(token.startswith("--from=") for token in tokens):
+            # Источник лежит в предыдущей стадии образа, а не в репозитории.
+            continue
+        tokens = [token for token in tokens if not token.startswith("--")]
+        assert len(tokens) >= 2, stripped
+        sources.extend(tokens[:-1])
+    return sources
+
+
+def _covered_by(pattern: str, path: str) -> bool:
+    """Покрывает ли запись `paths:` конкретный путь репозитория."""
+    # Именно срез префикса, а не `lstrip`: набор символов съел бы точку у
+    # dotfile вроде `.dockerignore`.
+    normalised = path[2:] if path.startswith("./") else path
+    normalised = normalised.rstrip("/")
+    if pattern.endswith("/**"):
+        prefix = pattern[:-3]
+        return normalised == prefix or normalised.startswith(f"{prefix}/")
+    return pattern == normalised
+
+
 def _pins(filename: str) -> dict[str, str]:
     body = (REPO_ROOT / filename).read_text(encoding="utf-8")
     # Комментарии отбрасываются: `# via fastapi` под каждой записью и заголовок
@@ -179,6 +233,81 @@ class TestInstallFlags:
         # Предыдущие проверки проходят и на пустом списке совпадений.
         joined = "\n".join(body for _, body in _workflows())
         assert len(re.findall(r"^\s*pip install", joined, re.MULTILINE)) >= 2
+
+
+class TestDeployTriggers:
+    """Выкладку запускает то и только то, что образ формирует.
+
+    Здесь важна не экономия прогонов, а привязка исключений. Каждая пересборка
+    даёт новый digest, а VEX и waiver привязаны к точному digest и на новый не
+    переносятся. Значит лишняя выкладка не нейтральна: она молча снимает
+    покрытие исключениями с работающего образа и красит следующий scan.
+
+    Denylist это гарантировать не может в принципе: `paths-ignore` перечисляет
+    известные пути, а требование звучит про все остальные, которых ещё нет.
+    Allowlist переворачивает задачу в ту, у которой есть источник факта, —
+    `COPY` из Dockerfile.
+    """
+
+    def test_image_inputs_are_visible(self) -> None:
+        # Проверки ниже проходят и на пустом разборе, поэтому сначала требуем,
+        # чтобы Dockerfile и allowlist действительно прочитались.
+        assert len(_image_inputs()) >= 2
+        assert len(_trigger_paths("deploy.yml", "paths")) >= 2
+
+    def test_deploy_filters_by_allowlist(self) -> None:
+        body = (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
+        assert re.search(r"^\s+paths:\s*$", body, re.MULTILINE)
+        # Возврат к denylist снимает гарантию целиком, поэтому запрещён здесь,
+        # а не оставлен на ревью.
+        assert not re.search(r"^\s+paths-ignore:\s*$", body, re.MULTILINE)
+
+    @pytest.mark.parametrize("source", _image_inputs())
+    def test_every_image_input_triggers_deploy(self, source: str) -> None:
+        allowlist = _trigger_paths("deploy.yml", "paths")
+        assert any(_covered_by(pattern, source) for pattern in allowlist), (
+            f"Dockerfile берёт {source}, но deploy.yml на него не реагирует: "
+            f"образ и production разъедутся молча"
+        )
+
+    def test_dockerfile_and_workflow_trigger_themselves(self) -> None:
+        allowlist = _trigger_paths("deploy.yml", "paths")
+        # Dockerfile и `.dockerignore` меняют образ, не меняя ни одного
+        # копируемого файла; сам workflow задаёт сборку, подпись и deploy.
+        for path in ("Dockerfile", ".dockerignore", ".github/workflows/deploy.yml"):
+            assert any(_covered_by(pattern, path) for pattern in allowlist), path
+
+    def test_scripts_used_by_deploy_trigger_deploy(self) -> None:
+        body = (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
+        payload = "\n".join(
+            line for line in body.splitlines() if not line.lstrip().startswith("#")
+        )
+        allowlist = _trigger_paths("deploy.yml", "paths")
+        referenced = set(re.findall(r"scripts/[A-Za-z0-9_./-]+\.py", payload))
+        assert referenced, "deploy.yml не исполняет ни одного скрипта репозитория"
+        for script in referenced:
+            # Такой скрипт — часть gate самой выкладки, а не документация:
+            # его правка обязана пройти новый production gate.
+            assert any(_covered_by(pattern, script) for pattern in allowlist), script
+
+    def test_policy_paths_do_not_rebuild_the_image(self) -> None:
+        # Набор берётся из самого scan-workflow, а не из списка в тесте:
+        # добавленный туда policy-путь автоматически попадает под требование.
+        allowlist = _trigger_paths("deploy.yml", "paths")
+        deploy_body = (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
+        payload = "\n".join(
+            line
+            for line in deploy_body.splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        for path in _trigger_paths("image-scan.yml", "paths"):
+            if f"{path}" in payload and path.endswith(".py"):
+                # Verifier, который исполняет сама выкладка, — исключение:
+                # он и пересканирует, и обязан пересобрать.
+                continue
+            assert not any(_covered_by(pattern, path) for pattern in allowlist), (
+                f"{path} считается policy-only, но запускает пересборку образа"
+            )
 
 
 class TestCycloneDxSbom:
@@ -423,14 +552,15 @@ class TestRecurringImageScan:
 
         assert re.search(r"^\s+push:\s*$", workflow, re.MULTILINE)
         assert re.search(r"^\s+paths:\s*$", workflow, re.MULTILINE)
-        assert re.search(r"^\s+paths-ignore:\s*$", deploy, re.MULTILINE)
         for path in policy_paths:
             assert f"- {path}" in workflow
-            assert f"- {path}" in deploy
         assert "- scripts/verify_attestation_certificate.py" in workflow
-        # Этот verifier используется самим deploy: его изменение должно пройти
-        # новый production gate, а не считаться policy-only документацией.
-        assert "- scripts/verify_attestation_certificate.py" not in deploy
+        # С 09-02 deploy отбирает пути allowlist'ом, поэтому «не пересобирать»
+        # означает отсутствие пути в его `paths`, а не присутствие в списке
+        # исключений. Полноту этого требования держит `TestDeployTriggers`;
+        # здесь остаётся другая половина контракта — что policy-путь вообще
+        # запускает повторный scan.
+        assert not re.search(r"^\s+paths-ignore:\s*$", deploy, re.MULTILINE)
 
     def test_uses_dedicated_read_only_identity(self, workflow: str) -> None:
         assert "github-image-scanner@" in workflow

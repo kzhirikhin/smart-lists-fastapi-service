@@ -4,19 +4,25 @@ on:
   push:
     branches:
       - main
-    # Policy-only изменение должно переоценить тот же production digest, а не
-    # создать новый образ, к которому exact VEX/waiver уже не относится.
-    paths-ignore:
-      - PROJECT_MEMORY.md
-      - security/SBOM_RUNBOOK.md
-      - security/vex/**
-      - security/waivers.json
-      - scripts/evaluate_image_scan.py
-      - scripts/verify_image_evidence.py
-      - .github/workflows/image-scan.yml
-      - tests/test_image_evidence.py
-      - tests/test_scan_policy.py
-      - tests/test_supply_chain.py
+    # Allowlist, а не перечень исключений. Пересобирать образ имеет смысл
+    # только от того, что в него попадает, плюс от самой выкладки и её
+    # verifier; policy-only изменение при этом переоценивает тот же production
+    # digest вместо создания нового, к которому exact VEX/waiver не относится.
+    #
+    # Раньше здесь стоял `paths-ignore`, и он ломался молча: перечислить можно
+    # только известные на момент написания пути, а любой новый файл вне образа
+    # в список не попадал и запускал выкладку. Так 09-02 тестовый PR №57
+    # пересобрал production и обесценил 27 exact VEX-statements предыдущего
+    # digest. Множество «всё остальное в репозитории» из источника факта не
+    # выводится, а множество входов образа — выводится: состав allowlist
+    # сверяется с `COPY` в Dockerfile тестом `TestDeployTriggers`.
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - requirements.txt
+      - app/**
+      - scripts/verify_attestation_certificate.py
+      - .github/workflows/deploy.yml
 
 # Токен по умолчанию только на чтение; job deploy добирает id-token сама.
 permissions:
