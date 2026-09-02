@@ -334,10 +334,12 @@ class TestGitHubArtifactAttestation:
         step = workflow.split(
             "- name: Generate keyless GitHub artifact attestation", 1
         )[1].split("\n      - name:", 1)[0]
-        assert (
-            "uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d"
-            in step
-        )
+        # Конкретный SHA здесь не закрепляется: форму пина уже проверяет
+        # `TestActionPins`, обходя все workflow, а дубль точного значения
+        # красит прогон на каждом Dependabot-бампе, ничего при этом не
+        # защищая. Держим то, что этой проверке принадлежит: подписывает
+        # именно `actions/attest`, а не другое действие.
+        assert re.search(r"uses: actions/attest@[0-9a-f]{40}\b", step)
         assert "subject-name: ${{ env.IMAGE }}" in step
         assert "subject-digest: ${{ steps.build.outputs.digest }}" in step
         assert "push-to-registry" not in step
