@@ -1,0 +1,833 @@
+{
+  "$schema": "https://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:501d60bc-b861-4bd5-8488-885b7f2e7762",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-02T06:16:01Z",
+    "component": {
+      "bom-ref": "pkg:oci/insights-api@sha256:93b0c75b06d1d36882b13bef5613d56dce96f4898ebcb04e304d9eaa4dcc3894",
+      "type": "container",
+      "name": "insights-api",
+      "version": "sha256:93b0c75b06d1d36882b13bef5613d56dce96f4898ebcb04e304d9eaa4dcc3894"
+    },
+    "properties": [
+      {
+        "name": "smart-lists:vex:reviewed-by",
+        "value": "@kzhirikhin"
+      },
+      {
+        "name": "smart-lists:vex:reviewed-at",
+        "value": "2026-09-02T06:16:01Z"
+      },
+      {
+        "name": "smart-lists:vex:approval",
+        "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/pull/59"
+      }
+    ]
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:deb/debian/gzip@1.13-1?arch=amd64&distro=debian-13.6",
+      "type": "library",
+      "name": "gzip",
+      "version": "1.13-1",
+      "purl": "pkg:deb/debian/gzip@1.13-1?arch=amd64&distro=debian-13.6"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-13.6&upstream=acl%402.3.2-2",
+      "type": "library",
+      "name": "libacl1",
+      "version": "2.3.2-2+b1",
+      "purl": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-13.6&upstream=acl%402.3.2-2"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/libncursesw6@6.5%2B20250216-2?arch=amd64&distro=debian-13.6&upstream=ncurses",
+      "type": "library",
+      "name": "libncursesw6",
+      "version": "6.5+20250216-2",
+      "purl": "pkg:deb/debian/libncursesw6@6.5%2B20250216-2?arch=amd64&distro=debian-13.6&upstream=ncurses"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.6&upstream=sqlite3",
+      "type": "library",
+      "name": "libsqlite3-0",
+      "version": "3.46.1-7+deb13u1",
+      "purl": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.6&upstream=sqlite3"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2?arch=amd64&distro=debian-13.6&upstream=ncurses",
+      "type": "library",
+      "name": "libtinfo6",
+      "version": "6.5+20250216-2",
+      "purl": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2?arch=amd64&distro=debian-13.6&upstream=ncurses"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/ncurses-base@6.5%2B20250216-2?arch=all&distro=debian-13.6&upstream=ncurses",
+      "type": "library",
+      "name": "ncurses-base",
+      "version": "6.5+20250216-2",
+      "purl": "pkg:deb/debian/ncurses-base@6.5%2B20250216-2?arch=all&distro=debian-13.6&upstream=ncurses"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2?arch=amd64&distro=debian-13.6&upstream=ncurses",
+      "type": "library",
+      "name": "ncurses-bin",
+      "version": "6.5+20250216-2",
+      "purl": "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2?arch=amd64&distro=debian-13.6&upstream=ncurses"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl",
+      "type": "library",
+      "name": "perl-base",
+      "version": "5.40.1-6",
+      "purl": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc",
+      "type": "library",
+      "name": "libc-bin",
+      "version": "2.41-12+deb13u3",
+      "purl": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+    },
+    {
+      "bom-ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc",
+      "type": "library",
+      "name": "libc6",
+      "version": "2.41-12+deb13u3",
+      "purl": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "CVE-2025-69720",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимый путь находится в CLI infocmp. Exact runtime запускает только uvicorn, а проверенный код приложения не создаёт процессы и не содержит вызовов infocmp."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libncursesw6@6.5%2B20250216-2?arch=amd64&distro=debian-13.6&upstream=ncurses"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2025-69720"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-69720",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимый путь находится в CLI infocmp. Exact runtime запускает только uvicorn, а проверенный код приложения не создаёт процессы и не содержит вызовов infocmp."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2?arch=amd64&distro=debian-13.6&upstream=ncurses"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2025-69720"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-69720",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимый путь находится в CLI infocmp. Exact runtime запускает только uvicorn, а проверенный код приложения не создаёт процессы и не содержит вызовов infocmp."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ncurses-base@6.5%2B20250216-2?arch=all&distro=debian-13.6&upstream=ncurses"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2025-69720"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-69720",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимый путь находится в CLI infocmp. Exact runtime запускает только uvicorn, а проверенный код приложения не создаёт процессы и не содержит вызовов infocmp."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2?arch=amd64&distro=debian-13.6&upstream=ncurses"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2025-69720"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-11822",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимость требует открытия специально подготовленной SQLite-базы и FTS5 MATCH. Exact runtime не импортирует SQLite или архивные data-модули и не принимает файлы баз данных."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.6&upstream=sqlite3"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-11822"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-11824",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимость требует открытия специально подготовленной SQLite-базы и FTS5 MATCH. Exact runtime не импортирует SQLite или архивные data-модули и не принимает файлы баз данных."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.6&upstream=sqlite3"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-11824"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-12087",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимый путь требует Perl Socket и вызова pack_ip_mreq_source с коротким недоверенным буфером. Exact runtime запускает Python/uvicorn и не создаёт Perl-процессы."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-12087"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-13221",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимость находится в Perl regex с более чем 65535 фиксированными ветками alternation. Exact runtime запускает Python/uvicorn и не создаёт Perl-процессы."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-13221"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41992",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимый путь требует одной gzip -d с подготовленными LZW- и LZH-входами. Exact runtime запускает только uvicorn, а код приложения не создаёт процессы и не вызывает gzip."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/gzip@1.13-1?arch=amd64&distro=debian-13.6"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-41992"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-42496",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Уязвимый код обработки symlink из Archive::Tar отсутствует в exact rootfs: нет полных Perl-пакетов и самого модуля Archive::Tar. Наличие perl-base не добавляет этот модуль."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-42496"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-42497",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Уязвимый код обработки hardlink из Archive::Tar отсутствует в exact rootfs: нет полных Perl-пакетов и самого модуля Archive::Tar. Наличие perl-base не добавляет этот модуль."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-42497"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-48959",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Уязвимый fastForward находится в IO::Uncompress::Unzip, которого нет в exact rootfs вместе с полными Perl-пакетами. Установленный perl-base этого кода не содержит."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-48959"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-48961",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Уязвимый путь относится к CLI zipdetails, а не к библиотечным вызовам. В exact rootfs отсутствуют zipdetails и полные Perl-пакеты, поэтому исполняемого кода нет."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-48961"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-48962",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Уязвимая обработка output glob через eval находится в File::GlobMapper. В exact rootfs отсутствуют этот модуль и полные Perl-пакеты; perl-base данного кода не содержит."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-48962"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54369",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Эксплуатация требует привилегированного вызова acl_*_file по пути с контролируемым symlink-компонентом. Контейнер работает как appuser; код не запускает ACL-утилиты и не загружает libacl."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-13.6&upstream=acl%402.3.2-2"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-54369"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-54370",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "TOCTOU требует привилегированного getfacl, setfacl или chacl по атакуемому пути. Контейнер работает как appuser; приложение не создаёт процессы и не загружает libacl."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-13.6&upstream=acl%402.3.2-2"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-54370"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-57432",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимость требует обработки большой недоверенной строки-шаблона Perl pack/unpack. Exact runtime запускает Python/uvicorn и не создаёт процессы Perl или другие дочерние процессы."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-57432"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-57433",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Уязвимый разбор SX_HOOK при thaw/retrieve находится в модуле Storable. В exact rootfs отсутствуют Storable и полные Perl-пакеты; perl-base этого модуля не содержит."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-57433"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-7017",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Уязвимая пересылка credentials через cross-origin redirect находится в HTTP::Tiny. В exact rootfs отсутствуют HTTP::Tiny и полные Perl-пакеты; perl-base кода не содержит."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-7017"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-8376",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "requires_environment",
+        "detail": "Официальное описание ограничивает уязвимость 32-битными сборками Perl. Метаданные exact production image подтверждают архитектуру amd64, поэтому требуемая среда отсутствует."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-8376"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-9538",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "detail": "Неограниченное выделение памяти при чтении tar находится в Archive::Tar. В exact rootfs отсутствуют сам Archive::Tar и полные Perl-пакеты; perl-base данного кода не содержит."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6&upstream=perl"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-9538"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5435",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимы устаревшие DNS-print функции для TSIG. В 754 ELF exact rootfs нет их импортов или ссылок вне поставляющих libc/libresolv, а runtime-приложение не запускает процессы и не загружает native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5435"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5435",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Уязвимы устаревшие DNS-print функции для TSIG. В 754 ELF exact rootfs нет их импортов или ссылок вне поставляющих libc/libresolv, а runtime-приложение не запускает процессы и не загружает native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5435"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5450",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Heap overflow требует scanf-формат %mc с явной шириной больше 1024. Полный scan exact rootfs не нашёл такого формата; приложение также не запускает CLI и не загружает native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5450"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5450",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Heap overflow требует scanf-формат %mc с явной шириной больше 1024. Полный scan exact rootfs не нашёл такого формата; приложение также не запускает CLI и не загружает native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5450"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5928",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Buffer under-read требует вызова ungetwc. В runtime-поверхности /app и /usr/local exact image нет вызовов ungetwc или загрузки libstdc++; приложение не запускает системные процессы и native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5928"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-5928",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": "Buffer under-read требует вызова ungetwc. В runtime-поверхности /app и /usr/local exact image нет вызовов ungetwc или загрузки libstdc++; приложение не запускает системные процессы и native libraries."
+      },
+      "affects": [
+        {
+          "ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u3?arch=amd64&distro=debian-13.6&upstream=glibc"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://security-tracker.debian.org/tracker/CVE-2026-5928"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/fca75bc7bf4183a30562137ab363d3f0f88e87b0/scripts/verify_image_evidence.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/33597642045"
+        }
+      ]
+    }
+  ]
+}
