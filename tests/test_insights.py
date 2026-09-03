@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 from app.core.request_boundary import InsightsBoundaryMiddleware
 from app.main import app
+from app.services import ai
 from tests.conftest import CALLER_SA, SERVICE_AUDIENCE
 
 client = TestClient(app)
@@ -273,40 +274,131 @@ def test_insights_empty_item():
     assert response.status_code == 422
 
 
-def test_anthropic_call_grants_the_model_no_capabilities():
-    """Вызов состоит ровно из модели, лимита вывода, system prompt и сообщения.
+class TestModelSelection:
+    """Какая модель обслуживает запрос и что уходит в вызов вместе с ней.
 
-    Проверяется набор аргументов целиком, а не отсутствие конкретного из них.
-    Инструменты, MCP-серверы, container и beta-заголовки — единственный способ
-    дать модели что-то помимо текста: без них она не может ни выйти в сеть, ни
-    выполнить код, ни обратиться к metadata-серверу, какой бы injection ни
-    приехала в payload. Появление любого из этих ключей обязано быть
-    осознанным решением, а не побочным следствием правки prompt.
+    Переключатель `INSIGHTS_MODEL` существует ради сравнения Haiku и Sonnet на
+    настоящих списках и уедет вместе со сравнением. Пока он есть, набор
+    аргументов вызова перестал быть одним и тем же для всех конфигураций,
+    поэтому проверяется каждая: свойство «набор целиком», на котором держится
+    A39, обязано выполняться в любой из них, а не в среднем.
     """
-    with patch("app.services.ai.client.messages.create", new_callable=AsyncMock) as mock_create:
-        mock_create.return_value = make_mock_response("Инсайт")
 
-        response = client.post(
+    BODY = {
+        "title": "Ремонт",
+        "items": [{"name": "Купить плитку", "is_completed": False}],
+        "groups": ["Дом"],
+        "user_message": "С чего начать?",
+    }
+
+    def call(self):
+        return client.post(
             "/insights",
-            json={
-                "title": "Ремонт",
-                "items": [{"name": "Купить плитку", "is_completed": False}],
-                "groups": ["Дом"],
-                "user_message": "С чего начать?",
-            },
+            json=self.BODY,
             headers={"Authorization": "Bearer test-secret-123"},
         )
 
-        assert response.status_code == 200
-        assert set(mock_create.call_args.kwargs) == {
-            "model",
-            "max_tokens",
-            "system",
-            "messages",
-        }
-        # Позиционных аргументов у SDK-вызова быть не должно: они прошли бы
-        # мимо проверки набора ключей выше.
-        assert mock_create.call_args.args == ()
+    def test_no_model_choice_grants_capabilities(self):
+        """Ни одна запись реестра не даёт модели ничего, кроме генерации текста.
+
+        Набор берётся обходом самого реестра, а не перечислением известных
+        записей: инструменты, MCP-серверы, `container` и beta-заголовки —
+        единственный способ дать модели сеть, выполнение кода или доступ к
+        metadata-серверу, и появление любого из них обязано быть осознанным
+        решением. Список, который ведётся руками, остался бы зелёным для
+        записи, которую в него забыли добавить.
+        """
+        allowed = {"model", "thinking"}
+        assert ai.MODEL_CHOICES, "пустой реестр сделал бы проверку бессмысленной"
+        for name, choice in ai.MODEL_CHOICES.items():
+            assert set(choice) <= allowed, name
+            assert isinstance(choice["model"], str) and choice["model"], name
+        assert ai.DEFAULT_MODEL_CHOICE in ai.MODEL_CHOICES
+
+    def test_anthropic_call_grants_the_model_no_capabilities(self):
+        """Конфигурация по умолчанию: ровно модель, лимит, system prompt и сообщение."""
+        with patch("app.services.ai.settings.insights_model", "haiku"), patch(
+            "app.services.ai.client.messages.create", new_callable=AsyncMock
+        ) as mock_create:
+            mock_create.return_value = make_mock_response("Инсайт")
+
+            assert self.call().status_code == 200
+            assert set(mock_create.call_args.kwargs) == {
+                "model",
+                "max_tokens",
+                "system",
+                "messages",
+            }
+            assert mock_create.call_args.kwargs["model"] == "claude-haiku-4-5-20251001"
+            # Позиционных аргументов у SDK-вызова быть не должно: они прошли бы
+            # мимо проверки набора ключей выше.
+            assert mock_create.call_args.args == ()
+
+    def test_sonnet_adds_only_explicitly_disabled_thinking(self):
+        """Sonnet приносит ровно один дополнительный ключ, и тот выключает размышления.
+
+        Пропуск `thinking` здесь не нейтрален: Sonnet 5 включил бы adaptive
+        thinking сам, черновик начал бы делить `max_tokens` с ответом, и при
+        исчерпании лимита текстового блока в ответе не осталось бы вовсе.
+        """
+        with patch("app.services.ai.settings.insights_model", "sonnet"), patch(
+            "app.services.ai.client.messages.create", new_callable=AsyncMock
+        ) as mock_create:
+            mock_create.return_value = make_mock_response("Инсайт")
+
+            assert self.call().status_code == 200
+            assert set(mock_create.call_args.kwargs) == {
+                "model",
+                "max_tokens",
+                "system",
+                "messages",
+                "thinking",
+            }
+            assert mock_create.call_args.kwargs["model"] == "claude-sonnet-5"
+            assert mock_create.call_args.kwargs["thinking"] == {"type": "disabled"}
+            assert mock_create.call_args.args == ()
+
+    @pytest.mark.parametrize("configured", ["  SONNET  ", "Sonnet"])
+    def test_value_is_normalised(self, configured):
+        """Регистр и крайние пробелы в переменной окружения не меняют выбор."""
+        with patch("app.services.ai.settings.insights_model", configured), patch(
+            "app.services.ai.client.messages.create", new_callable=AsyncMock
+        ) as mock_create:
+            mock_create.return_value = make_mock_response("Инсайт")
+
+            assert self.call().status_code == 200
+            assert mock_create.call_args.kwargs["model"] == "claude-sonnet-5"
+
+    @pytest.mark.parametrize("configured", ["opus", "", "claude-sonnet-5"])
+    def test_unknown_value_falls_back_to_default(self, configured, caplog):
+        """Неизвестное значение не роняет инсайты и не уходит в Anthropic как модель.
+
+        Именно поэтому переменная выбирает запись реестра, а не задаёт модель:
+        `claude-sonnet-5` в этом списке — тоже неизвестное значение, потому что
+        это идентификатор, а не имя записи.
+        """
+        with patch("app.services.ai.settings.insights_model", configured), patch(
+            "app.services.ai.client.messages.create", new_callable=AsyncMock
+        ) as mock_create, caplog.at_level(logging.WARNING):
+            mock_create.return_value = make_mock_response("Инсайт")
+
+            assert self.call().status_code == 200
+            assert mock_create.call_args.kwargs["model"] == "claude-haiku-4-5-20251001"
+            assert "INSIGHTS_MODEL" in caplog.text
+
+    def test_model_is_logged_and_content_is_not(self, caplog):
+        """Идентификатор модели в логе есть, содержимое списка — нет."""
+        with patch("app.services.ai.settings.insights_model", "sonnet"), patch(
+            "app.services.ai.client.messages.create", new_callable=AsyncMock
+        ) as mock_create, caplog.at_level(logging.INFO):
+            mock_create.return_value = make_mock_response("Инсайт про плитку")
+
+            assert self.call().status_code == 200
+
+        assert "claude-sonnet-5" in caplog.text
+        assert "Купить плитку" not in caplog.text
+        assert "С чего начать?" not in caplog.text
+        assert "Инсайт про плитку" not in caplog.text
 
 
 def test_insights_user_message_whitespace_only():

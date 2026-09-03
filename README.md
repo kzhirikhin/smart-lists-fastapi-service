@@ -261,7 +261,14 @@ ANTHROPIC_ORGANIZATION_ID=00000000-0000-0000-0000-000000000000
 ANTHROPIC_SERVICE_ACCOUNT_ID=svac_replace_me
 ANTHROPIC_WORKSPACE_ID=wrkspc_replace_me
 DEBUG=true
+INSIGHTS_MODEL=haiku
 ```
+
+`INSIGHTS_MODEL` is optional and selects a named entry from the model registry
+in `app/services/ai.py` — currently `haiku` (the default) or `sonnet`. It takes
+a registry name rather than a model identifier on purpose: an arbitrary string
+can never become the model that gets billed. An unrecognised value does not
+stop the service; it falls back to the default and logs a warning.
 
 None of these are secrets, and none of them work outside Google Cloud. Both
 directions of authentication need infrastructure the local machine does not
