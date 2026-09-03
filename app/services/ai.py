@@ -1,8 +1,13 @@
 import json
+import logging
+from collections.abc import Mapping
 
 import anthropic
 from app.core.anthropic_auth import build_credentials
+from app.core.config import settings
 from app.models.insights import ListItem, NotesMeta, SubItem
+
+logger = logging.getLogger(__name__)
 
 # Явный `credentials=` отключает поиск учётных данных в переменных окружения
 # целиком: SDK не станет читать `ANTHROPIC_API_KEY`, даже если тот окажется
@@ -25,6 +30,52 @@ client = anthropic.AsyncAnthropic(
     base_url="https://api.anthropic.com",
     timeout=30.0,
 )
+
+# Модели, между которыми переключается сервис, и полный набор аргументов вызова
+# для каждой. Переменная окружения выбирает запись отсюда, а не задаёт модель
+# напрямую — см. `Settings.insights_model`.
+#
+# `thinking` у Sonnet 5 передан явно и означает «без размышлений». Пропуск этого
+# аргумента там не нейтрален: Sonnet 5 включает adaptive thinking сам, на effort
+# по умолчанию, и тогда черновик делит `max_tokens` с ответом. При лимите в 2048
+# это не только дороже: если размышления съедят лимит целиком, текстового блока
+# в ответе не окажется вовсе и `get_insight` завершится ошибкой. У Haiku 4.5
+# умолчание обратное — размышления выключены, — поэтому лишний аргумент ему не
+# нужен и не передаётся.
+#
+# Ни одна запись не может дать модели ничего, кроме генерации текста: допустимые
+# ключи ограничены и это закреплено тестом, а не соглашением (A39).
+MODEL_CHOICES: dict[str, Mapping[str, object]] = {
+    "haiku": {"model": "claude-haiku-4-5-20251001"},
+    "sonnet": {
+        "model": "claude-sonnet-5",
+        "thinking": {"type": "disabled"},
+    },
+}
+
+DEFAULT_MODEL_CHOICE = "haiku"
+
+
+def resolve_model_choice() -> Mapping[str, object]:
+    """Аргументы модели для текущей конфигурации.
+
+    Неизвестное значение не останавливает сервис: инсайты продолжают работать на
+    модели по умолчанию, а расхождение видно в логе. Падать здесь было бы хуже —
+    опечатка в одной необязательной переменной обесточила бы работающую функцию
+    целиком, тогда как безопасное поведение существует и оно же сегодняшнее.
+    """
+    name = settings.insights_model.strip().lower()
+    choice = MODEL_CHOICES.get(name)
+    if choice is None:
+        logger.warning(
+            "INSIGHTS_MODEL=%r не входит в набор %s — используется %s",
+            name,
+            sorted(MODEL_CHOICES),
+            DEFAULT_MODEL_CHOICE,
+        )
+        return MODEL_CHOICES[DEFAULT_MODEL_CHOICE]
+    return choice
+
 
 def serialize_untrusted_payload(payload: dict[str, object]) -> str:
     """Сериализует данные и не позволяет их тексту закрыть служебный XML-тег."""
@@ -119,8 +170,14 @@ async def get_insight(
         "</untrusted_user_data_json>"
     )
 
+    model_choice = resolve_model_choice()
+    # Идентификатор модели приватным содержимым не является, а без него нельзя
+    # соотнести оценку инсайта с тем, кто его написал. Ни prompt, ни ответ, ни
+    # поля списка в лог по-прежнему не попадают.
+    logger.info("Insight model: %s", model_choice["model"])
+
     message = await client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        **model_choice,
         max_tokens=2048,
         system=system_prompt,
         messages=[
