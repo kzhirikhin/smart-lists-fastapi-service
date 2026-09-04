@@ -30,7 +30,7 @@ LEGACY_REMOVAL = pytest.mark.xfail(
     reason="контракт станет зелёным после удаления канала Anthropic",
 )
 
-ALLOWED_MODELS = {"gemini-2.5-flash-lite", "gemini-3.1-flash-lite"}
+ALLOWED_MODELS = {"gemini-3.1-flash-lite", "gemini-3.5-flash-lite"}
 EXPECTED_PROJECT = "project-5b7c1bd1-572b-410d-826"
 
 
