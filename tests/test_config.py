@@ -27,10 +27,6 @@ from app.core.config import Settings
 REQUIRED = {
     "EXPECTED_CALLER_SA": "caller@example.iam.gserviceaccount.com",
     "SERVICE_AUDIENCE": "https://insights-api.example.run.app",
-    "ANTHROPIC_FEDERATION_RULE_ID": "fdrl_example",
-    "ANTHROPIC_ORGANIZATION_ID": "00000000-0000-0000-0000-000000000000",
-    "ANTHROPIC_SERVICE_ACCOUNT_ID": "svac_example",
-    "ANTHROPIC_WORKSPACE_ID": "wrkspc_example",
 }
 
 # Маркер, которого не должно оказаться ни в одном поле и ни в одном сообщении

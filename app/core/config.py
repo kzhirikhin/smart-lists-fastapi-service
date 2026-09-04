@@ -27,19 +27,6 @@ class Settings(BaseSettings):
 
     debug: bool = False
 
-    # Доступ к Anthropic через workload identity federation. Все четыре
-    # значения несекретны: идентификаторы правила, организации, сервисного
-    # аккаунта и workspace. Секретов в конфигурации сервиса не осталось —
-    # ни одного.
-    #
-    # Обязательные по той же причине, что и проверка вызывающего: другого
-    # способа обратиться к Anthropic нет, и сервис без них умеет только
-    # возвращать ошибки.
-    anthropic_federation_rule_id: str
-    anthropic_organization_id: str
-    anthropic_service_account_id: str
-    anthropic_workspace_id: str
-
     # Проверка вызывающего по Google ID-токену. Оба значения несекретные:
     # email service account и адрес самого сервиса. `SERVICE_AUDIENCE`
     # принимает список через запятую — у сервиса Cloud Run бывает несколько

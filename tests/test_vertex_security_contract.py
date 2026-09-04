@@ -1,7 +1,6 @@
 """Целевые security-контракты миграции AI Insights на Vertex AI.
 
-Строгий XFAIL фиксирует ожидаемый RED до реализации: непройденный контракт не
-ломает промежуточный этап, но неожиданный XPASS ломает CI и требует снять маркер.
+Контракты стали обязательным CI-gate после реализации Vertex AI.
 Проверки статические, поэтому не требуют credentials или установленного SDK.
 """
 
@@ -11,8 +10,6 @@ import ast
 import re
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 AI_PATH = REPO_ROOT / "app/services/ai.py"
 CONFIG_PATH = REPO_ROOT / "app/core/config.py"
@@ -20,15 +17,6 @@ MAIN_PATH = REPO_ROOT / "app/main.py"
 AUTH_PATH = REPO_ROOT / "app/core/anthropic_auth.py"
 REQUIREMENTS_PATH = REPO_ROOT / "requirements.in"
 OUTBOUND_TEST_PATH = REPO_ROOT / "tests/test_outbound_calls.py"
-
-TARGET_IMPLEMENTATION = pytest.mark.xfail(
-    strict=True,
-    reason="контракт станет зелёным после реализации Vertex AI",
-)
-LEGACY_REMOVAL = pytest.mark.xfail(
-    strict=True,
-    reason="контракт станет зелёным после удаления канала Anthropic",
-)
 
 ALLOWED_MODELS = {"gemini-3.1-flash-lite", "gemini-3.5-flash-lite"}
 EXPECTED_PROJECT = "project-5b7c1bd1-572b-410d-826"
@@ -66,7 +54,6 @@ def _keywords(call: ast.Call) -> dict[str, ast.expr]:
     return {keyword.arg: keyword.value for keyword in call.keywords if keyword.arg}
 
 
-@TARGET_IMPLEMENTATION
 def test_vertex_client_is_explicitly_pinned_and_has_no_escape_hatch() -> None:
     calls = _calls(AI_PATH, "genai.Client")
     assert len(calls) == 1
@@ -91,7 +78,6 @@ def test_vertex_client_is_explicitly_pinned_and_has_no_escape_hatch() -> None:
     assert "base_url" not in source
 
 
-@TARGET_IMPLEMENTATION
 def test_model_is_a_reviewed_literal_and_not_runtime_overridable() -> None:
     source = _source(AI_PATH)
     selected = {
@@ -107,7 +93,6 @@ def test_model_is_a_reviewed_literal_and_not_runtime_overridable() -> None:
     assert "os.environ" not in source
 
 
-@TARGET_IMPLEMENTATION
 def test_generation_has_minimal_capabilities_and_bounded_output() -> None:
     calls = _calls(AI_PATH, "client.aio.models.generate_content")
     assert len(calls) == 1
@@ -138,7 +123,6 @@ def test_generation_has_minimal_capabilities_and_bounded_output() -> None:
     assert forbidden.isdisjoint(config_keywords)
 
 
-@TARGET_IMPLEMENTATION
 def test_blocked_or_empty_vertex_response_fails_closed() -> None:
     source = _source(AI_PATH)
     assert "response.text" in source
@@ -154,7 +138,6 @@ def test_blocked_or_empty_vertex_response_fails_closed() -> None:
     assert empty_fallbacks == []
 
 
-@TARGET_IMPLEMENTATION
 def test_vertex_errors_are_sanitized_at_http_boundary() -> None:
     source = _source(MAIN_PATH)
     assert "google.genai" in source
@@ -165,7 +148,6 @@ def test_vertex_errors_are_sanitized_at_http_boundary() -> None:
     assert 'detail="AI provider request failed"' in source
 
 
-@LEGACY_REMOVAL
 def test_runtime_uses_adc_and_contains_no_provider_api_key() -> None:
     config = _source(CONFIG_PATH)
     requirements = _source(REQUIREMENTS_PATH)
@@ -175,7 +157,6 @@ def test_runtime_uses_adc_and_contains_no_provider_api_key() -> None:
     assert re.search(r"^anthropic==", requirements, re.MULTILINE) is None
 
 
-@LEGACY_REMOVAL
 def test_outbound_allowlist_knows_vertex_and_forgets_anthropic() -> None:
     source = _source(OUTBOUND_TEST_PATH)
     assert "google-genai-client" in source
@@ -183,7 +164,6 @@ def test_outbound_allowlist_knows_vertex_and_forgets_anthropic() -> None:
     assert "app/core/anthropic_auth.py" not in source
 
 
-@LEGACY_REMOVAL
 def test_anthropic_runtime_paths_are_fully_removed() -> None:
     assert not AUTH_PATH.exists()
     runtime = "\n".join(

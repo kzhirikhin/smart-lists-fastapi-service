@@ -62,16 +62,12 @@ jobs:
 
       # Заведомо нерабочие значения. Нужны только чтобы прошла валидация
       # Settings при импорте приложения: до сети тесты не доходят — клиент
-      # Anthropic замокан, а settings подменяется фикстурой в conftest.py.
+      # Vertex AI замокан, а settings подменяется фикстурой в conftest.py.
       - name: Run tests
         run: pytest
         env:
           EXPECTED_CALLER_SA: test-caller@example.iam.gserviceaccount.com
           SERVICE_AUDIENCE: https://insights-api.example.run.app
-          ANTHROPIC_FEDERATION_RULE_ID: fdrl_test
-          ANTHROPIC_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000000
-          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_test
-          ANTHROPIC_WORKSPACE_ID: wrkspc_test
 
   deploy:
     needs: test
@@ -366,7 +362,8 @@ jobs:
       # Личность указана явно, хотя `gcloud run deploy` и сохранил бы текущую.
       # Умолчание здесь — дефолтный compute service account проекта, общий для
       # всего проекта: пересоздание сервиса без этой строки тихо вернуло бы
-      # сервис на него, и правило федерации Anthropic перестало бы совпадать.
+      # сервис на него, и доступ к Vertex AI либо пропал бы, либо получил бы
+      # неизвестный blast radius другой identity.
       #
       # `--port` по той же причине: контейнер слушает 8000, а умолчание Cloud
       # Run — 8080. Сейчас порт держится состоянием сервиса, и пересоздание с

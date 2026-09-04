@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-09-04 (выбор `gemini-3.5-flash-lite`)
+**Последнее обновление:** 2026-09-04 (runtime переведён на Vertex AI)
 
 **Состояние:** активная разработка
 
@@ -11,7 +11,7 @@
 
 Smart Lists AI Service — отдельный FastAPI-сервис для AI-инсайтов
 web-приложения Smart Lists. Он получает ограниченный снимок списка, формирует
-защищённый prompt, вызывает Anthropic Claude и возвращает текст ответа.
+защищённый prompt, вызывает Gemini через Vertex AI и возвращает текст ответа.
 
 Сервис не хранит данные и не знает пользователей. Граница ответственности
 разделена так:
@@ -20,7 +20,7 @@ web-приложения Smart Lists. Он получает ограниченн
   списку, читает данные из PostgreSQL и применяет суточную квоту;
 - этот сервис аутентифицирует вызывающий backend по Google ID-токену, повторно
   валидирует payload, ограничивает нагрузку, изолирует недоверенный текст в
-  prompt и общается с Anthropic;
+  prompt и общается с Vertex AI через ADC своей Cloud Run identity;
 - Cloud Run и Google Cloud задают ingress, TLS, IAM и личность сервиса.
 
 ## Актуальный стек
@@ -28,11 +28,10 @@ web-приложения Smart Lists. Он получает ограниченн
 - Python 3.13;
 - FastAPI `0.141.1`, Starlette `1.3.1`, Uvicorn `0.52.2`;
 - Pydantic `2.12.5` и pydantic-settings `2.15.0`;
-- Anthropic SDK `0.121.0` — версия, в которой появился
-  `WorkloadIdentityCredentials`;
+- Google Gen AI SDK `2.20.0` для асинхронного вызова Vertex AI;
 - SlowAPI `0.1.10`;
 - google-auth `2.56.3` и requests `2.34.2` — проверка входящих Google
-  ID-токенов и запрос собственного токена у metadata-сервера;
+  ID-токенов; исходящий SDK использует ADC runtime service account;
 - pytest `9.1.1`, pytest-asyncio `1.4.0` и FastAPI TestClient;
 - Docker, Google Artifact Registry и Google Cloud Run;
 - GitHub Actions, GitHub OIDC и Google Workload Identity Federation;
@@ -50,13 +49,11 @@ web-приложения Smart Lists. Он получает ограниченн
   streaming-лимит фактически прочитанного body;
 - `app/core/config.py` — env-backed настройки;
 - `app/core/caller_auth.py` — проверка вызывающего по Google ID-токену;
-- `app/core/anthropic_auth.py` — собственный ID-токен из metadata-сервера и
-  учётные данные федерации для Anthropic;
 - `app/core/limiter.py` — SlowAPI limiter и извлечение source IP;
 - `app/core/logging_config.py` — базовая конфигурация stdout logging;
 - `app/models/insights.py` — request/response contract, нормализация и бюджеты;
 - `app/routers/insights.py` — rate limit и orchestration после ранней границы;
-- `app/services/ai.py` — prompt, сериализация недоверенных данных и Anthropic;
+- `app/services/ai.py` — prompt, сериализация недоверенных данных и Vertex AI;
 - `tests/` — API-, validation- и prompt-boundary тесты;
 - `requirements.in` / `requirements-dev.in` — прямые зависимости, правятся
   руками;
@@ -84,7 +81,7 @@ web-приложения Smart Lists. Он получает ограниченн
 
 - публичный liveness endpoint;
 - возвращает `{"status": "ok"}`;
-- не проверяет Anthropic и другие внешние зависимости;
+- не проверяет Vertex AI и другие внешние зависимости;
 - исключён из обычного request log.
 
 ### `POST /insights`
@@ -137,9 +134,9 @@ web-приложения Smart Lists. Он получает ограниченн
 | непустые item notes обоих уровней | не более 10 |
 | сумма item notes обоих уровней | не более 8 000 символов |
 | запросы `/insights` | 5 в минуту на source IP и процесс |
-| Anthropic timeout | 30 секунд на попытку |
-| Anthropic retries | 2 повтора — дефолт SDK, явно не задан |
-| Anthropic output | `max_tokens=2048` |
+| Vertex AI timeout | 30 секунд |
+| Vertex AI output | `max_output_tokens=2048` |
+| Язык ответа | явный `response_language`: `ru`, `vi`, `en`, `ja`; default `en` для старого клиента |
 
 Для `user_message`, `list_note` и item note:
 
@@ -171,11 +168,9 @@ Pydantic-бюджеты действуют независимо вторым с�
 6. Payload сериализуется в JSON с `ensure_ascii=False`, затем `&`, `<` и `>`
    заменяются на unicode escape sequences.
 7. JSON помещается в единственный блок `<untrusted_user_data_json>`.
-8. Асинхронный Anthropic client вызывает модель
-   `claude-haiku-4-5-20251001`. Если кешированный access-токен истёк, клиент
-   сначала берёт у metadata-сервера ID-токен и обменивает его — примерно раз в
-   десять минут, а не на каждый запрос.
-9. Первый текстовый content block возвращается клиенту. Отсутствие такого блока
+8. Асинхронный Google Gen AI client вызывает `gemini-3.5-flash-lite` через
+   Vertex AI `v1` в `global`, используя ADC runtime service account.
+9. Непустой текст возвращается клиенту; пустой или заблокированный ответ
    считается ошибкой.
 
 ## Модель безопасности
@@ -204,37 +199,18 @@ Shared Bearer secret удалён 2026-08-09. Ротировать больше 
 `SERVICE_AUDIENCE` принимает список через запятую: у сервиса Cloud Run два
 действующих адреса, и токен выпускается под тот, что настроен у вызывающего.
 
-### Аутентификация в Anthropic
+### Аутентификация в Vertex AI
 
-Обратное направление устроено симметрично: сервис предъявляет Anthropic не
-ключ, а собственный Google ID-токен и обменивает его на access-токен на десять
-минут (`app/core/anthropic_auth.py`). Ключа API у сервиса нет — ни в
-переменных окружения, ни в образе, ни в ревизиях Cloud Run.
-
-- Токен запрашивается у metadata-сервера с `format=full`. Без этого параметра
-  в токене нет claim `email`, а правило федерации сверяет его вместе с `sub`;
-  проверка закреплена тестом, потому что ошибка проявляется только в
-  production и выглядит как немотивированный отказ.
-- `credentials=` передаётся в клиент явно, и SDK из-за этого не читает
-  `ANTHROPIC_API_KEY` вовсе: забытая переменная не может подменить способ
-  входа. Это тоже закреплено тестом — поведение зависит от внутреннего правила
-  библиотеки.
-- `base_url=` передаётся явно по той же причине: без аргумента SDK берёт адрес
-  из `ANTHROPIC_BASE_URL`, и одна переменная в ревизии увела бы весь поток
-  вместе с токеном в заголовке `Authorization` на чужой хост — без нового
-  образа, то есть мимо хешей зависимостей, скана и выкладки по digest.
-  Закреплено парой тестов: один требует, чтобы переменная не двигала клиент,
-  второй проверяет на клиенте без аргумента, что механизм подмены вообще жив.
-- Правило на стороне Anthropic привязано к `sub` и `email` service account
-  `insights-api-runtime`. Смена личности сервиса ломает аутентификацию, поэтому
-  `deploy.yml` задаёт `--service-account` явно.
-- Scope токена — `workspace:developer`, столько же, сколько давал прежний ключ.
-  Сузить не удалось: `workspace:inference` в правиле недоступен, а запрос
-  такого scope при обмене сервер молча игнорирует (проверено 2026-08-10).
+Google Gen AI SDK использует Application Default Credentials Cloud Run
+service account `insights-api-runtime`; API key и отдельный секрет отсутствуют.
+Клиент кодом закреплён на Vertex AI, проект
+`project-5b7c1bd1-572b-410d-826`, location `global` и API `v1`. Поэтому
+переменная окружения не может переключить получателя, проект или Developer API.
+Runtime identity имеет только custom role с `aiplatform.endpoints.predict`.
 
 - Токен существует только на серверной стороне и живёт около часа.
 - `/health` публичен по назначению; `/insights` без корректного header не
-  вызывает Anthropic.
+  вызывает Vertex AI.
 - Проверка подписи требует публичных ключей Google: библиотека забирает их по
   сети и кеширует, поэтому первая проверка после холодного старта ходит наружу.
   Недоступность этого эндпоинта означает отказ в обслуживании, а не пропуск
@@ -255,14 +231,8 @@ Shared Bearer secret удалён 2026-08-09. Ротировать больше 
 - Web-приложение держит авторитетную суточную квоту на пользователя.
 - Этот сервис добавляет локальный защитный rate limit по IP.
 - Все размеры контекста и выход модели ограничены.
-- Anthropic client имеет конечный timeout — 30 секунд на попытку.
-- `max_retries` клиенту явно не передан, поэтому действует дефолт SDK: два
-  автоматических повтора, то есть до трёх попыток на один входящий запрос.
-  По деньгам это почти незаметно — повторяются неуспешные вызовы, которые
-  обычно не тарифицируются. Значимо другое: худший случай удерживает воркер
-  около 90 секунд вместо 30, и порог насыщения инстансов оказывается втрое
-  ниже наивной оценки по timeout. Если повторы понадобится убрать, задавай
-  `max_retries=0` явно — молчание здесь означает «два», а не «ноль».
+- Vertex AI client имеет конечный timeout 30 секунд и output cap 2048 токенов.
+- Модель, проект, location и API version не переопределяются окружением.
 
 ### Логирование и ошибки
 
@@ -271,8 +241,8 @@ Shared Bearer secret удалён 2026-08-09. Ротировать больше 
   булевы признаки наличия вопроса и заметки списка.
 - Не логируются Bearer header, API key, title, item names, note text,
   `user_message`, полный prompt и успешный AI response.
-- `anthropic.APIStatusError` преобразуется в generic `502`; в error log идут
-  только status, тип и `request_id`, но не `exc.message` с телом ответа vendor.
+- `google.genai.errors.APIError` преобразуется в generic `502`; в error log
+  идут только status и тип, но не message или тело ответа vendor.
 - `ValueError`, включая отсутствие text block, преобразуется в generic `500`.
 - Остальные исключения обрабатываются стандартным механизмом FastAPI.
 
@@ -322,19 +292,14 @@ Shared Bearer secret удалён 2026-08-09. Ротировать больше 
 | `DEBUG` | необязательна | включает `/docs`, `/redoc` и `/openapi.json`, default `false` |
 | `EXPECTED_CALLER_SA` | обязательна | email service account, которому разрешено звать. Несекретна |
 | `SERVICE_AUDIENCE` | обязательна | допустимые `aud` через запятую — адреса этого сервиса. Несекретна |
-| `ANTHROPIC_FEDERATION_RULE_ID` | обязательна | `fdrl_*` — правило федерации. Несекретна |
-| `ANTHROPIC_ORGANIZATION_ID` | обязательна | UUID организации Anthropic. Несекретна |
-| `ANTHROPIC_SERVICE_ACCOUNT_ID` | обязательна | `svac_*` — личность на стороне Anthropic. Несекретна |
-| `ANTHROPIC_WORKSPACE_ID` | обязательна | `wrkspc_*` — workspace для токена. Несекретна |
 
 Секретов в списке нет ни одного: конфигурация сервиса состоит из
-идентификаторов и адресов. Все обязательны — без них сервис не может ни
-пустить вызывающего, ни обратиться к Anthropic, и падение на старте честнее,
-чем ответ ошибкой на каждый запрос.
+идентификаторов и адресов. Оба обязательны для проверки вызывающего; Vertex AI
+использует identity самой ревизии и не требует env credentials.
 
-Settings и глобальный Anthropic client создаются при импорте модулей. Поэтому
-даже тестам нужны placeholder env values до импорта `app.main`; в CI они
-заведомо нерабочие, а вызов Anthropic замокан.
+Settings и глобальный Vertex AI client создаются при импорте модулей. Поэтому
+тестам нужны placeholder входные env values до импорта `app.main`; вызов
+Vertex AI замокан.
 
 Корневой `.env` игнорируется Git и предназначен только для development.
 Production-значения не должны попадать в репозиторий, GitHub test jobs, Bruno
@@ -374,12 +339,9 @@ python -m pip install --require-hashes -r requirements-dev.txt
 uvicorn app.main:app --reload
 ```
 
-Нужен `.env` с `EXPECTED_CALLER_SA`, `SERVICE_AUDIENCE`, четырьмя
-`ANTHROPIC_*` идентификаторами и, при необходимости, `DEBUG=true`. Локально не
-работает ни одна из двух сторон аутентификации: входящий токен подписывает
-только Google, а исходящий требует metadata-сервера, которого вне Google Cloud
-нет. Ручные запросы к локальному инстансу упираются в 403 — это ожидаемо, и
-проверять контракт нужно тестами.
+Нужен `.env` с `EXPECTED_CALLER_SA`, `SERVICE_AUDIENCE` и, при необходимости,
+`DEBUG=true`. Входящий токен подписывает Google; исходящий Vertex AI SDK
+использует ADC. Автотесты оба сетевых пути изолируют моками.
 
 Bruno collection содержит ручные запросы. Её `secret` — secret variable и не
 должен сохраняться в коллекции. Текущий `base_url` указывает на Cloud Run,
@@ -393,11 +355,8 @@ Bruno collection содержит ручные запросы. Её `secret` —
 pytest tests/ -v
 ```
 
-Сейчас прогон даёт 180 проверок: 67 в `tests/test_supply_chain.py`, 47 в
-`tests/test_insights.py`, включая два параметризованных теста бюджетов, 31 в
-`tests/test_image_evidence.py`, 14 в `tests/test_scan_policy.py`, 8 в
-`tests/test_attestation_certificate.py`, 7 в `tests/test_outbound_calls.py` и 6
-в `tests/test_anthropic_auth.py`.
+Полный прогон после миграции даёт 204 зелёные проверки в чистом Python 3.13
+контейнере с установкой по хешированному `requirements-dev.txt`.
 
 `test_supply_chain.py` — статические контракты цепочки поставок, аналог набора
 `security-static` из web-репозитория. Отдельного gate здесь нет, поэтому они
@@ -413,8 +372,8 @@ policy evaluator, offline runtime evidence без `docker run` и раздель
 
 `test_outbound_calls.py` (2026-09-01) той же формой закрывает A56: обходит
 `app` и требует, чтобы каждый сетевой вызов лежал в allowlist с причиной —
-`requests`, `httpx`, `urllib`, `aiohttp`, `socket`, конструктор клиента
-Anthropic, транспорт google-auth и `verify_oauth2_token`. Раньше закреплены
+`requests`, `httpx`, `urllib`, `aiohttp`, `socket`, конструктор Google Gen AI,
+транспорт google-auth и `verify_oauth2_token`. Раньше закреплены
 были адреса трёх существующих вызовов, но не их число, поэтому четвёртый вызов
 с адресом из окружения прогон бы не покрасил. Зеркало `outbound-requests.test.ts`
 из web-репозитория.
@@ -422,11 +381,11 @@ Anthropic, транспорт google-auth и `verify_oauth2_token`. Раньше
 Покрыты:
 
 - health;
-- успешный insight с Anthropic mock;
+- успешный insight с Vertex AI mock;
 - неверный и отсутствующий Authorization;
 - отказ без токена до Pydantic даже для malformed body;
 - ранний отказ для большого `Content-Length` и для chunked body без него;
-- отсутствие тела ошибки Anthropic в логах при сохранении `request_id`;
+- отсутствие message и тела ошибки Vertex AI в логах;
 - границы title, items, item names, question и notes;
 - нормализация whitespace-only optional text;
 - список без записей и список только с общей заметкой;
@@ -435,25 +394,20 @@ Anthropic, транспорт google-auth и `verify_oauth2_token`. Раньше
 - подпункты: вложенность в payload, отсутствие ключа при пустом списке,
   запрос без `sub_items`, влияние на требуемую глубину ответа, поштучный и
   совокупный лимиты, недостижимость второго уровня;
-- отсутствие у модели любых возможностей: набор аргументов `messages.create`
-  проверяется целиком, поэтому `tools`, `mcp_servers`, `container` или betas
-  нельзя добавить незаметно;
+- отсутствие у модели любых возможностей: набор аргументов
+  `generate_content` и config проверяются целиком;
 - невозможность закрыть untrusted-data block через пользовательский текст —
   отдельно для полей пункта и подпункта;
-- запрос собственного ID-токена: `format=full`, audience и заголовок
-  metadata-сервера; отказ metadata-сервера не превращается в пустой токен;
-- клиент Anthropic аутентифицируется федерацией, а выставленная
-  `ANTHROPIC_API_KEY` этого не меняет;
-- адрес Anthropic не задаётся окружением: выставленная `ANTHROPIC_BASE_URL` не
-  двигает клиент, и отдельный контрольный тест на клиенте без `base_url=`
-  фиксирует, что механизм подмены в SDK жив, а не отмер.
+- Vertex client закреплён на ADC, точных project/location/API version и модели;
+- `response_language` принимает только четыре поддерживаемых кода, а пустой
+  или заблокированный ответ Vertex обрабатывается fail-closed;
 - VEX подавляет только точное CycloneDX `not_affected` с evidence/review;
   остальные states, blanket package, отсутствие evidence и пересечение с
   waiver отвергаются; активный waiver работает, истёкший — уже нет, а срок
   больше 30 дней запрещён.
 
 Autouse fixture сбрасывает in-memory limiter между тестами. Production
-декоратор при этом остаётся активным. Сеть и настоящий Anthropic API в тестах
+декоратор при этом остаётся активным. Сеть и настоящий Vertex AI в тестах
 не используются.
 
 ## CI
@@ -624,8 +578,7 @@ Markdown-сводка и evidence JSON сохранены одним artifact н
 контура.
 
 Long-lived GCP JSON key в GitHub нет. В Cloud Run вне репозитория
-настраиваются `EXPECTED_CALLER_SA`, `SERVICE_AUDIENCE` и четыре `ANTHROPIC_*`
-идентификатора — все несекретные. Сервис выполняется под
+настраиваются только `EXPECTED_CALLER_SA` и `SERVICE_AUDIENCE`. Сервис выполняется под
 `insights-api-runtime@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com`,
 и `deploy.yml` передаёт эту личность явно.
 
@@ -694,6 +647,15 @@ curl -X PATCH \
 
 ## Важные решения
 
+- 2026-09-04: этап 5 реализовал единственный runtime-канал через Vertex AI:
+  `google-genai==2.20.0`, `gemini-3.5-flash-lite`, ADC Cloud Run identity,
+  фиксированные project/location/API version и отсутствие tools. Английский
+  system prompt больше не угадывает язык по смешанному payload: Next.js
+  передаёт локаль интерфейса, FastAPI принимает только `ru`, `vi`, `en`, `ja`
+  и требует ответ строго на соответствующем языке. Default `en` сохраняет
+  совместимость при поочерёдном rollout. Anthropic runtime-код, SDK и env-поля
+  удалены; внешнее правило federation отзывается отдельным этапом после
+  production-переключения.
 - 2026-09-04: для миграции на Vertex AI выбрана `gemini-3.5-flash-lite`.
   Финальный изолированный benchmark на 16 синтетических сценариях и английском
   system prompt сравнил её с новой `gemini-3.5-flash-lite`: 3.1 дала p50/p95
@@ -878,7 +840,7 @@ curl -X PATCH \
 - Rate limit этого сервиса оставлен дополнительным in-memory per-IP барьером,
   потому что авторитетная пользовательская квота хранится в PostgreSQL
   web-приложения. Он не должен подменять распределённый cost control.
-- Health check намеренно не зависит от Anthropic: liveness должен показывать,
+- Health check намеренно не зависит от AI-провайдера: liveness должен показывать,
   что процесс отвечает, а временный отказ vendor не должен вызывать
   бесконечную замену исправных instances.
 

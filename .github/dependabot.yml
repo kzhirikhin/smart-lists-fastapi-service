@@ -30,7 +30,7 @@ updates:
         patterns:
           - "*"
 
-    # Мажоры руками: fastapi, starlette, pydantic и anthropic меняются
+    # Мажоры руками: fastapi, starlette, pydantic и google-genai меняются
     # согласованно, и `AGENTS.md` требует проверять их совместимость вручную.
     ignore:
       - dependency-name: "*"

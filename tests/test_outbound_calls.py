@@ -36,7 +36,6 @@ OUTBOUND = (
     ("urllib", re.compile(r"\burllib\.request\b|\burlopen\s*\(")),
     ("aiohttp", re.compile(r"\baiohttp\.")),
     ("socket", re.compile(r"\bsocket\.(?:socket|create_connection)\s*\(")),
-    ("anthropic-client", re.compile(r"\banthropic\.(?:Async)?Anthropic\w*\s*\(")),
     ("google-transport", re.compile(r"\bgoogle_requests\.Request\s*\(")),
     ("google-id-token", re.compile(r"\bverify_oauth2_token\s*\(")),
 )
@@ -44,17 +43,13 @@ OUTBOUND = (
 # Модули, которым исходящий запрос разрешён, и почему. Пустая причина
 # недопустима: смысл allowlist в объяснении, а не в разрешении.
 ALLOWED: dict[str, str] = {
-    "app/core/anthropic_auth.py": (
-        "metadata-сервер GCP: адрес и params — константы, обязателен заголовок "
-        "Metadata-Flavor; выдаёт ID-токен личности сервиса"
-    ),
     "app/core/caller_auth.py": (
         "JWKS Google при проверке токена вызывающего; verify_oauth2_token не "
         "читает jku из самого токена"
     ),
     "app/services/ai.py": (
-        "клиент Anthropic с явным base_url, поэтому ANTHROPIC_BASE_URL его не "
-        "двигает (см. test_anthropic_auth)"
+        "клиент Vertex AI с закреплёнными project/location/API version; "
+        "аутентификация идёт через ADC runtime service account"
     ),
 }
 
@@ -125,9 +120,9 @@ class TestOutboundCalls:
         for name, reason in ALLOWED.items():
             assert reason.strip(), name
 
-    def test_anthropic_client_pins_its_base_url(self) -> None:
-        # Связка та же, что у A68 в основном репозитории: адрес обязан
-        # оставаться заданным кодом. Поведение — что переменная окружения не
-        # двигает клиент — закреплено в test_anthropic_auth.
+    def test_vertex_client_pins_its_destination(self) -> None:
+        # Проект и location задаются кодом, поэтому окружение не может
+        # перенаправить приватное содержимое списка другому получателю.
         body = (REPO_ROOT / "app" / "services" / "ai.py").read_text(encoding="utf-8")
-        assert "base_url=" in body
+        assert 'project="project-5b7c1bd1-572b-410d-826"' in body
+        assert 'location="global"' in body

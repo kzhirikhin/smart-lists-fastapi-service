@@ -39,6 +39,7 @@ async def get_insight(
         user_message=body.user_message,
         list_note=body.list_note,
         notes_meta=body.notes_meta,
+        response_language=body.response_language,
     )
 
     return InsightResponse(insight=insight_text)
