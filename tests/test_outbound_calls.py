@@ -30,6 +30,7 @@ APP_DIR = REPO_ROOT / "app"
 # здесь: в `requirements.in` нет ни одного http-клиента помимо `requests`,
 # который тянет сам google-auth, поэтому остаются эти вызовы и импорт нового.
 OUTBOUND = (
+    ("google-genai-client", re.compile(r"\bgenai\.Client\s*\(")),
     ("requests", re.compile(r"\brequests\.(?:get|post|put|patch|delete|head|request|Session)\s*\(")),
     ("httpx", re.compile(r"\bhttpx\.(?:AsyncClient|Client|get|post|request|stream)\s*\(")),
     ("urllib", re.compile(r"\burllib\.request\b|\burlopen\s*\(")),
@@ -84,6 +85,9 @@ class TestOutboundCalls:
         assert "app/main.py" in names
 
     def test_detector_matches_real_calls(self) -> None:
+        assert _outbound_in("client = genai.Client(vertexai=True)") == [
+            "google-genai-client"
+        ]
         assert _outbound_in("response = requests.get(URL, timeout=5)") == ["requests"]
         assert _outbound_in("async with httpx.AsyncClient() as c: ...") == ["httpx"]
         assert _outbound_in("import aiohttp\naiohttp.ClientSession()") == ["aiohttp"]
