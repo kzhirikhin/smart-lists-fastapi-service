@@ -58,6 +58,10 @@ RELEVANT_PACKAGES = {
     "ncurses-base",
     "libncursesw6",
     "libtinfo6",
+    "util-linux",
+    "libmount1",
+    "zlib1g",
+    "libpcre2-8-0",
 }
 
 PROCESS_MODULES = {"subprocess", "pexpect"}
@@ -65,7 +69,7 @@ DATA_MODULES = {"sqlite3", "tarfile", "gzip", "zipfile"}
 NATIVE_MODULES = {"ctypes", "cffi"}
 SENSITIVE_COMMANDS = re.compile(
     r"(?<![A-Za-z0-9_.-])"
-    r"(?:perl(?:5\.40\.1)?|gzip|infocmp|zipdetails|setfacl|getfacl|chacl)"
+    r"(?:perl(?:5\.40\.1)?|gzip|infocmp|zipdetails|setfacl|getfacl|chacl|mount|umount|nsenter)"
     r"(?![A-Za-z0-9_.-])"
 )
 
@@ -101,8 +105,50 @@ GLIBC_RESOLVER_PROVIDERS = {
 GLIBC_LARGE_MC_FORMAT = re.compile(rb"%(?:[1-9][0-9]*\$)?([0-9]+)mc")
 GLIBC_UNGETWC_MARKERS = (b"ungetwc", b"libstdc++.so.6")
 
+# Сканируется вся /app + /usr/local, включая установленные зависимости и ELF,
+# а не только исходники приложения. Символы ловят также строки для dlsym.
+RUNTIME_NATIVE_MARKERS = {
+    "libmount_runtime_surface_absent": (b"libmount.so", b"mnt_context_mount"),
+    "pcre2_runtime_surface_absent": (b"libpcre2-", b"pcre2_dfa_match"),
+    "zlib_gzwrite_runtime_surface_absent": (
+        b"gzwrite", b"gzprintf", b"gzvprintf", b"gz_vacate",
+    ),
+}
+
 # В отчёте явно видно, какие проверки поддерживают будущий VEX.
 CLAIM_CHECKS: dict[str, tuple[str, ...]] = {
+    "CVE-2026-76642": (
+        "runtime_non_root", "runtime_entrypoint_exact",
+        "application_no_process_execution", "application_no_native_library_loading",
+        "application_no_sensitive_command_literals", "fstab_unconfigured",
+        "libmount_runtime_surface_absent", "native_elf_parseable",
+    ),
+    "CVE-2026-78409": (
+        "runtime_non_root", "runtime_entrypoint_exact",
+        "application_no_process_execution", "application_no_native_library_loading",
+        "application_no_sensitive_command_literals", "fstab_unconfigured",
+        "libmount_runtime_surface_absent", "native_elf_parseable",
+    ),
+    "CVE-2026-78410": (
+        "runtime_non_root", "runtime_entrypoint_exact",
+        "application_no_process_execution", "application_no_native_library_loading",
+        "application_no_sensitive_command_literals", "fstab_unconfigured",
+        "libmount_runtime_surface_absent", "native_elf_parseable",
+    ),
+    "CVE-2026-78408": (
+        "runtime_non_root", "runtime_entrypoint_exact",
+        "application_no_process_execution", "application_no_sensitive_command_literals",
+    ),
+    "CVE-2026-85091": (
+        "runtime_entrypoint_exact", "application_no_process_execution",
+        "application_no_native_library_loading", "native_elf_parseable",
+        "zlib_gzwrite_runtime_surface_absent",
+    ),
+    "CVE-2026-86145": (
+        "runtime_entrypoint_exact", "application_no_process_execution",
+        "application_no_native_library_loading", "native_elf_parseable",
+        "pcre2_runtime_surface_absent",
+    ),
     "CVE-2026-42496": ("perl_extended_packages_absent", "perl_archive_tar_absent"),
     "CVE-2026-42497": ("perl_extended_packages_absent", "perl_archive_tar_absent"),
     "CVE-2026-9538": ("perl_extended_packages_absent", "perl_archive_tar_absent"),
@@ -492,6 +538,23 @@ def verify_image(
 
         names = set(members)
 
+        # У mount-CVE требуется разрешённая root-конфигурация fstab. Не считаем
+        # отсутствие/симлинк/нечитаемый файл доказательством безопасной настройки.
+        fstab_member = members.get("etc/fstab")
+        fstab_ok = False
+        if fstab_member is not None and fstab_member.isfile():
+            fstab = _read_tar_file(archive, members, "etc/fstab", max_bytes=1024 * 1024)
+            try:
+                entries = [line.strip() for line in fstab.decode("utf-8").splitlines()
+                           if line.strip() and not line.lstrip().startswith("#")]
+                fstab_ok = (not entries and fstab_member.uid == 0
+                            and not (fstab_member.mode & 0o022))
+            except UnicodeDecodeError:
+                pass
+        record("fstab_unconfigured", fstab_ok,
+               "fstab — обычный root-owned файл без записей и group/other write"
+               if fstab_ok else "безопасный пустой fstab не подтверждён")
+
         def absent(
             check_id: str,
             predicate: Callable[[str], bool],
@@ -640,6 +703,9 @@ def verify_image(
         resolver_references: list[str] = []
         large_mc_formats: list[str] = []
         runtime_ungetwc_references: list[str] = []
+        native_surface_references: dict[str, list[str]] = {
+            check_id: [] for check_id in RUNTIME_NATIVE_MARKERS
+        }
         resolver_markers = {
             symbol: symbol.encode("ascii") for symbol in GLIBC_RESOLVER_SYMBOLS
         }
@@ -661,6 +727,12 @@ def verify_image(
                     large_mc_formats.append(f"/{name}:%{width}mc")
 
             if runtime_file:
+                for check_id, markers in RUNTIME_NATIVE_MARKERS.items():
+                    for marker in markers:
+                        if marker in data:
+                            native_surface_references[check_id].append(
+                                f"/{name}:{marker.decode('ascii')}"
+                            )
                 for marker in GLIBC_UNGETWC_MARKERS:
                     if marker in data:
                         runtime_ungetwc_references.append(
@@ -690,6 +762,10 @@ def verify_image(
                 runtime_ungetwc_references.append(f"/{name}:ungetwc")
 
         resolver_references = sorted(set(resolver_references))
+        for check_id, references in native_surface_references.items():
+            record(check_id, not references,
+                   "в /app и /usr/local отсутствуют маркеры уязвимого native API"
+                   if not references else f"найдены runtime-ссылки: {sorted(set(references))[:5]!r}")
         runtime_ungetwc_references = sorted(set(runtime_ungetwc_references))
         large_mc_formats = sorted(set(large_mc_formats))
         record(
