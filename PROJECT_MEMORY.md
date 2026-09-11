@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-09-11 (Vertex AI runtime и fail-closed pre-deploy vulnerability gate)
+**Последнее обновление:** 2026-09-11 (этап 7 проверки Vertex AI)
 
 **Состояние:** активная разработка
 
@@ -653,6 +653,15 @@ curl -X PATCH \
 ```
 
 ## Важные решения
+
+- 2026-09-11: этап 7 подтвердил live-вызовы `gemini-3.5-flash-lite` на
+  `ru`, `en`, `vi`, `ja` и synthetic peak из 150 задач с перекрёстными
+  ссылками; отчёт хранит только метрики и SHA-256 ответа. 223 теста и
+  production container build зелёные. IAM повторно проверен: runtime имеет
+  только `aiplatform.endpoints.predict`, user-managed ключей нет. Включённый
+  по умолчанию project-level in-memory cache Vertex AI отключён и подтверждён
+  через `cacheConfig`; `global` не гарантирует data residency, а возможное
+  abuse-monitoring логирование остаётся внешним остаточным риском.
 
 - 2026-09-04: этап 5 реализовал единственный runtime-канал через Vertex AI:
   `google-genai==2.20.0`, `gemini-3.5-flash-lite`, ADC Cloud Run identity,
