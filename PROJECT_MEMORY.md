@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-09-11 (объединены Vertex AI runtime и актуальная проверка CVE рабочего образа)
+**Последнее обновление:** 2026-09-11 (Vertex AI runtime и fail-closed pre-deploy vulnerability gate)
 
 **Состояние:** активная разработка
 
@@ -274,8 +274,8 @@ Runtime identity имеет только custom role с `aiplatform.endpoints.pr
   20 High package/CVE совпадений (6 и 15 уникальных CVE) в базовых
   Debian-пакетах: `perl-base`, glibc, ncurses, SQLite, ACL и gzip. У всех fix
   state `not-fixed` или `wont-fix`; исключений нет.
-- Grype в `deploy.yml` остаётся неблокирующей дельтой момента сборки и использует
-  `--only-fixed`. Независимый `image-scan.yml` раз в неделю и вручную берёт из
+- Grype в `deploy.yml` до выкладки fail-closed блокирует исправимые High/Critical
+  через `--only-fixed --fail-on high`. Независимый `image-scan.yml` раз в неделю и вручную берёт из
   Cloud Run все revisions с трафиком или tag, разрешает их только в ожидаемые
   `${IMAGE}@sha256:<digest>` и сканирует без `--only-fixed`. Сырой JSON передаёт
   `scripts/evaluate_image_scan.py`: High/Critical остаются блокирующими, кроме
@@ -480,8 +480,8 @@ Dockerfile тестом `TestDeployTriggers`, поэтому новый вход
   `sha256:b5e2b41c…41a6` до успешного Cloud Run deploy. Файл скачан обратно:
   CycloneDX 1.6, Syft 1.51.0, 2858 components, 1 083 779 байт; его
   `metadata.component.version` точно совпадает с target digest;
-- перед выкладкой образ сканируется grype (`--only-fixed`); шаг намеренно
-  не блокирующий — см. раздел о границах защит;
+- перед выкладкой exact digest сканируется Grype; исправимые High/Critical
+  блокируют deploy, а техническая ошибка шага обрабатывается fail-closed;
 - Cloud Run service `insights-api` в `us-central1` разворачивается по digest
   собранного образа, с явными `--service-account` и `--port 8000`.
 
