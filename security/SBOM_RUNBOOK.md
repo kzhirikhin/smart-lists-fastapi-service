@@ -72,7 +72,11 @@ non-root user, точный Uvicorn CMD, список установленных
 symbols каждого ELF64-файла и сканирует exact rootfs: импорты устаревших
 DNS-print функций, формат `%mc` с явной шириной больше 1024 и ссылки на
 `ungetwc`/`libstdc++` в runtime-поверхности `/app` + `/usr/local`. В
-`candidateClaims` перечислена 21 CVE и поддерживающие проверки.
+`candidateClaims` перечислены 27 CVE и поддерживающие проверки. С 2026-09-07
+добавлены root-owned пустой `fstab`, запрет команд mount/nsenter в приложении
+и отсутствие маркеров libmount, PCRE2 DFA и zlib gzip-write API во всей
+runtime-поверхности `/app` + `/usr/local`, включая зависимости. Это статические
+факты exact rootfs, а не обещание защиты после произвольного исполнения кода.
 `checksPassed: true` означает только, что автоматические факты сошлись: он не
 создаёт VEX и не заменяет чтение advisory и review.
 

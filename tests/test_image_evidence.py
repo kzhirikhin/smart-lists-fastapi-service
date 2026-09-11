@@ -81,14 +81,21 @@ def _write_rootfs(
     extra_files: dict[str, bytes] | None = None,
     include_status: bool = True,
     include_root_member: bool = False,
+    fstab_mode: int = 0o644,
+    fstab_uid: int = 0,
+    fstab_type: bytes = tarfile.REGTYPE,
+    include_fstab: bool = True,
 ) -> None:
     files = {
         "app/app/main.py": app_source,
         "app/app/__init__.py": b"",
+        "etc/fstab": b"# UNCONFIGURED FSTAB FOR BASE SYSTEM\n",
     }
     if include_status:
         files["var/lib/dpkg/status"] = status.encode()
     files.update(extra_files or {})
+    if not include_fstab:
+        files.pop("etc/fstab", None)
 
     with tarfile.open(path, mode="w") as archive:
         if include_root_member:
@@ -100,6 +107,15 @@ def _write_rootfs(
             info = tarfile.TarInfo(name)
             info.size = len(payload)
             info.mode = 0o644
+            if name == "etc/fstab":
+                info.mode = fstab_mode
+                info.uid = fstab_uid
+                info.type = fstab_type
+                if fstab_type == tarfile.SYMTYPE:
+                    info.linkname = "other-fstab"
+                    info.size = 0
+                    archive.addfile(info)
+                    continue
             archive.addfile(info, io.BytesIO(payload))
 
 
@@ -127,7 +143,7 @@ def test_safe_exact_image_passes_with_glibc_claims(tmp_path: Path) -> None:
     assert report["status"] == "PASS"
     assert all(_checks(report).values())
     claims = report["candidateClaims"]
-    assert len(claims) == len(CLAIM_CHECKS) == 21
+    assert len(claims) == len(CLAIM_CHECKS) == 27
     assert all(item["checksPassed"] for item in claims)
     assert {"CVE-2026-5435", "CVE-2026-5450", "CVE-2026-5928"} <= {
         item["vulnerabilityId"] for item in claims
@@ -349,3 +365,49 @@ def test_image_ref_and_digest_must_match_before_reading_files(tmp_path: Path) ->
             IMAGE_REF,
             "sha256:" + "b" * 64,
         )
+
+@pytest.mark.parametrize('rootfs_kwargs', [
+    {'extra_files': {'etc/fstab': b'/src /dst none bind,user,X-mount.owner=10001 0 0\n'}},
+    {'extra_files': {'etc/fstab': b'\xff'}},
+    {'fstab_mode': 0o666},
+    {'fstab_uid': 10001},
+    {'fstab_type': tarfile.SYMTYPE},
+    {'include_fstab': False},
+])
+def test_mount_configuration_fails_closed(tmp_path: Path, rootfs_kwargs: dict) -> None:
+    inspect_path, rootfs_path = _fixture_files(tmp_path, **rootfs_kwargs)
+    report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
+    assert report['status'] == 'FAIL'
+    assert not _checks(report)['fstab_unconfigured']
+    for claim in report['candidateClaims']:
+        if claim['vulnerabilityId'] in {'CVE-2026-76642', 'CVE-2026-78409', 'CVE-2026-78410'}:
+            assert not claim['checksPassed']
+
+
+@pytest.mark.parametrize(('marker', 'check_id', 'cve'), [
+    (b'libmount.so.1', 'libmount_runtime_surface_absent', 'CVE-2026-76642'),
+    (b'mnt_context_mount', 'libmount_runtime_surface_absent', 'CVE-2026-78409'),
+    (b'pcre2_dfa_match_8', 'pcre2_runtime_surface_absent', 'CVE-2026-86145'),
+    (b'libpcre2-8.so.0', 'pcre2_runtime_surface_absent', 'CVE-2026-86145'),
+    (b'gzwrite', 'zlib_gzwrite_runtime_surface_absent', 'CVE-2026-85091'),
+    (b'gzprintf', 'zlib_gzwrite_runtime_surface_absent', 'CVE-2026-85091'),
+    (b'gzvprintf', 'zlib_gzwrite_runtime_surface_absent', 'CVE-2026-85091'),
+])
+def test_new_native_path_in_dependency_invalidates_claim(
+    tmp_path: Path, marker: bytes, check_id: str, cve: str,
+) -> None:
+    inspect_path, rootfs_path = _fixture_files(
+        tmp_path, extra_files={'usr/local/lib/dependency.dat': marker},
+    )
+    report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
+    assert report['status'] == 'FAIL'
+    assert not _checks(report)[check_id]
+    assert not next(c for c in report['candidateClaims'] if c['vulnerabilityId'] == cve)['checksPassed']
+
+
+@pytest.mark.parametrize('command', ['mount', 'nsenter', 'umount'])
+def test_mount_command_literal_invalidates_runtime_claim(tmp_path: Path, command: str) -> None:
+    inspect_path, rootfs_path = _fixture_files(tmp_path, app_source=f'COMMAND = {command!r}\n'.encode())
+    report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
+    assert report['status'] == 'FAIL'
+    assert not _checks(report)['application_no_sensitive_command_literals']

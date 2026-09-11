@@ -3,9 +3,16 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-09-04 (runtime переведён на Vertex AI)
+**Последнее обновление:** 2026-09-11 (объединены Vertex AI runtime и актуальная проверка CVE рабочего образа)
 
 **Состояние:** активная разработка
+
+Security-review рабочего digest `sha256:16b779dd…fa79ea` от 2026-09-07:
+Grype нашёл 27 уникальных CVE / 65 High/Critical package matches; прежние VEX
+не относятся к этому образу. Offline evidence расширен с 21 до 27 candidate
+claims: проверяются также пустой root-owned `fstab` и отсутствие runtime-ссылок
+на mount/nsenter, libmount, PCRE2 DFA и zlib gzip-write API. Обоснования и
+границы выводов — `security/reviews/2026-09-07-serving-image.md`.
 
 ## Назначение
 
