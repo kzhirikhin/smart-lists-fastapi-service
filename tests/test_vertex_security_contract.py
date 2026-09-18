@@ -171,3 +171,20 @@ def test_anthropic_runtime_paths_are_fully_removed() -> None:
         for path in sorted((REPO_ROOT / "app").rglob("*.py"))
     )
     assert "anthropic" not in runtime.lower()
+
+
+def test_legacy_anthropic_env_is_removed_by_protected_deploy() -> None:
+    names = (
+        "ANTHROPIC_FEDERATION_RULE_ID",
+        "ANTHROPIC_ORGANIZATION_ID",
+        "ANTHROPIC_SERVICE_ACCOUNT_ID",
+        "ANTHROPIC_WORKSPACE_ID",
+    )
+    deploy = _source(REPO_ROOT / ".github/workflows/deploy.yml")
+    compose = _source(REPO_ROOT / "docker-compose.yml")
+
+    assert "--remove-env-vars=" + ",".join(names) in deploy
+    assert "--image \"${IMAGE}@${DIGEST}\"" in deploy
+    assert "--service-account ${{ env.RUNTIME_SA }}" in deploy
+    for name in names:
+        assert name not in compose
