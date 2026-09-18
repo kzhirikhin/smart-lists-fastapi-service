@@ -374,5 +374,6 @@ jobs:
             --image "${IMAGE}@${DIGEST}" \
             --region ${{ env.REGION }} \
             --service-account ${{ env.RUNTIME_SA }} \
+            --remove-env-vars=ANTHROPIC_FEDERATION_RULE_ID,ANTHROPIC_ORGANIZATION_ID,ANTHROPIC_SERVICE_ACCOUNT_ID,ANTHROPIC_WORKSPACE_ID \
             --port 8000 \
             --quiet
