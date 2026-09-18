@@ -1,12 +1,13 @@
 from collections.abc import Iterator
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 
 MAX_NOTE_LENGTH = 4_000
 MAX_ITEM_NOTES = 10
 MAX_ITEM_NOTES_CHARS = 8_000
 MAX_SUB_ITEMS = 100
+ResponseLanguage = Literal["ru", "vi", "en", "ja"]
 
 
 def normalize_optional_text(value: object) -> object:
@@ -61,6 +62,7 @@ class InsightRequest(BaseModel):
     user_message: Optional[str] = Field(default=None, max_length=500)
     list_note: Optional[str] = Field(default=None, max_length=MAX_NOTE_LENGTH)
     notes_meta: NotesMeta = Field(default_factory=NotesMeta)
+    response_language: ResponseLanguage = "en"
 
     @field_validator("user_message", "list_note", mode="before")
     @classmethod

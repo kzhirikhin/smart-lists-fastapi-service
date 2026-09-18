@@ -309,6 +309,38 @@ class TestDeployTriggers:
                 f"{path} считается policy-only, но запускает пересборку образа"
             )
 
+class TestPreDeployVulnerabilityGate:
+    """Исправимые High/Critical блокируют выкладку точного image digest."""
+
+    @pytest.fixture
+    def workflow(self) -> str:
+        return (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
+
+    @pytest.fixture
+    def step(self, workflow: str) -> str:
+        marker = "- name: Scan image for known vulnerabilities"
+        assert marker in workflow
+        return workflow.split(marker, 1)[1].split("\n      - name:", 1)[0]
+
+    def test_runs_after_sbom_and_before_deploy(self, workflow: str) -> None:
+        sbom = workflow.index("- name: Generate and attach CycloneDX SBOM")
+        scan = workflow.index("- name: Scan image for known vulnerabilities")
+        deploy = workflow.index("- name: Deploy to Cloud Run")
+        assert sbom < scan < deploy
+
+    def test_exact_digest_scan_is_fail_closed_for_actionable_findings(
+        self, step: str
+    ) -> None:
+        assert 'grype "${IMAGE}@${DIGEST}"' in step
+        assert "--only-fixed" in step
+        assert "--fail-on high" in step
+        assert "continue-on-error" not in step
+
+    def test_scanner_binary_is_versioned_and_checksum_verified(self, step: str) -> None:
+        assert re.search(r"GRYPE_VERSION:\s*\d+\.\d+\.\d+", step)
+        assert re.search(r"GRYPE_SHA256:\s*[0-9a-f]{64}", step)
+        assert "sha256sum -c -" in step
+
 
 class TestCycloneDxSbom:
     """Каждый deploy получает проверяемую опись ровно своего image digest.

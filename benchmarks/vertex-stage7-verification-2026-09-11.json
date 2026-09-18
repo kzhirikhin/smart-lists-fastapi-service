@@ -1,0 +1,50 @@
+{
+  "generatedAt": "2026-09-11T05:12:18.159384+00:00",
+  "project": "project-5b7c1bd1-572b-410d-826",
+  "location": "global",
+  "model": "gemini-3.5-flash-lite",
+  "credentialMode": "ephemeral-gcloud-user-token; runtime impersonation unavailable",
+  "syntheticDataOnly": true,
+  "results": [
+    {
+      "case": "language-ru",
+      "language": "ru",
+      "latencySeconds": 1.789,
+      "responseChars": 291,
+      "responseSha256": "8134c778783f8c5541abc1d7c7186cb9b6e612d2591c7c6c2852aae626b5d9ec",
+      "markerPassed": true
+    },
+    {
+      "case": "language-en",
+      "language": "en",
+      "latencySeconds": 1.087,
+      "responseChars": 266,
+      "responseSha256": "adeb8dc7b85894fcc867f404622b5957635520198a219a7f2df54f7f33100b50",
+      "markerPassed": true
+    },
+    {
+      "case": "language-vi",
+      "language": "vi",
+      "latencySeconds": 1.159,
+      "responseChars": 334,
+      "responseSha256": "06f060ba260318692230b1038aa41261129fa6e4e94dbbc99641dd18669a5daa",
+      "markerPassed": true
+    },
+    {
+      "case": "language-ja",
+      "language": "ja",
+      "latencySeconds": 1.089,
+      "responseChars": 147,
+      "responseSha256": "763f057fcad4ed3980d39df27c02e89db76b4809e039f961bd1352a574ad8819",
+      "markerPassed": true
+    },
+    {
+      "case": "peak-cross-references",
+      "language": "ru",
+      "latencySeconds": 3.84,
+      "responseChars": 2271,
+      "responseSha256": "2f8679dcebac1064c2f4651100cfee31fff62c2a0bd2d417788cd2c4056103ba",
+      "markerPassed": true
+    }
+  ]
+}

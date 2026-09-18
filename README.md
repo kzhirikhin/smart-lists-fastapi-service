@@ -2,7 +2,7 @@
 
 Smart Lists AI Service is the FastAPI companion service to
 [Smart Lists](https://github.com/kzhirikhin/smart-lists). It accepts a bounded,
-validated snapshot of a list, asks Anthropic Claude for an insight and returns
+validated snapshot of a list, asks Gemini through Vertex AI for an insight and returns
 the generated text to the web application.
 
 The service is intentionally small: it has one public health endpoint and one
@@ -31,15 +31,15 @@ No shared secret is involved in either direction. End-user authentication and
 list-level authorization are performed by the Smart Lists web application
 before it calls this API.
 
-**Keyless access to Anthropic.** The service holds no Anthropic API key. It
-presents the Google-signed ID token of its own Cloud Run identity and exchanges
-it for a ten-minute access token. A leaked configuration grants nothing: every
-value the service is configured with is a non-secret identifier.
+**Keyless access to Vertex AI.** The Google Gen AI SDK uses the Cloud Run
+service account through Application Default Credentials. The provider mode,
+project, location and stable API version are pinned in code; no API key or
+runtime destination override exists.
 
 **Bounded work at the API boundary.** Raw ASGI middleware authenticates the
 caller before parsing the body and caps both the declared and actually read
 body at 100,000 bytes, including chunked requests. Pydantic then validates
-every field before the Anthropic request is created. The contract caps list
+every field before the Vertex AI request is created. The contract caps list
 size, string lengths, groups, notes and the combined note budget. Requests are
 additionally limited to five per minute per source IP.
 
@@ -59,15 +59,14 @@ status, latency and source IP. Insight logs contain counts and boolean flags,
 not list titles, item names, notes, questions, tokens or secrets. Upstream
 failures are returned to the caller as generic errors.
 
-**Production-safe defaults.** Swagger UI and ReDoc are disabled unless `DEBUG`
-is explicitly enabled. The machine-readable OpenAPI schema remains available
-at `/openapi.json`. Secrets come from environment variables and `.env` is
+**Production-safe defaults.** Swagger UI, ReDoc and the machine-readable
+OpenAPI schema are disabled unless `DEBUG` is explicitly enabled. `.env` is
 ignored by Git. Production should always keep `DEBUG=false`.
 
 ### Least privilege and keyless delivery
 
 GitHub Actions uses `contents: read` by default. Tests receive deliberately
-non-functional placeholder credentials and mock the Anthropic network call, so
+non-functional placeholder credentials and mock the Vertex AI network call, so
 CI does not need production secrets.
 
 Deployment authenticates to Google Cloud through GitHub OIDC and Workload
@@ -148,7 +147,8 @@ Example request:
     "included_item_notes": 1,
     "omitted_item_notes": 0
   },
-  "user_message": "What should I prioritize?"
+  "user_message": "What should I prioritize?",
+  "response_language": "en"
 }
 ```
 
@@ -160,8 +160,8 @@ Example response:
 }
 ```
 
-The response language follows `user_message` when present, otherwise the
-language of the list content.
+`response_language` is an explicit required-output contract and accepts
+`ru`, `vi`, `en`, or `ja`; mixed-language list content cannot change it.
 
 Common error responses:
 
@@ -172,7 +172,7 @@ Common error responses:
 | `422` | Authenticated request data failed validation |
 | `429` | Per-IP rate limit exceeded |
 | `500` | The service could not produce a valid text result |
-| `502` | Anthropic returned an API error |
+| `502` | Vertex AI returned an API error |
 
 ## Request limits
 
@@ -186,6 +186,7 @@ Common error responses:
 | Groups | Up to 20 |
 | Group name | 1–100 characters |
 | User message | Up to 500 characters |
+| Response language | `ru`, `vi`, `en`, or `ja`; defaults to `en` for older callers |
 | List note | Up to 4,000 characters |
 | Note on one item | Up to 4,000 characters |
 | Note on one sub-item | Up to 4,000 characters |
@@ -212,17 +213,18 @@ all of them are.
    byte limit, validates the body and applies the per-IP rate limit.
 4. The service recomputes trusted note metadata and serializes all user content
    into an isolated JSON block.
-5. The asynchronous Anthropic client calls
-   `claude-haiku-4-5-20251001` with a 30-second timeout and a 2,048-token output
-   cap, refreshing its federated access token when the cached one expires.
-6. The first text block is returned as `{ "insight": "..." }`.
+5. The asynchronous Google Gen AI client calls `gemini-3.5-flash-lite` through
+   Vertex AI `v1` in the fixed GCP project and `global` location, using the
+   Cloud Run service account through ADC, a 30-second timeout and a 2,048-token
+   output cap.
+6. A non-empty text response is returned as `{ "insight": "..." }`.
 
 ## Tech stack
 
 - Python 3.13;
 - FastAPI and Uvicorn;
 - Pydantic and pydantic-settings;
-- Anthropic Python SDK;
+- Google Gen AI Python SDK for Vertex AI;
 - SlowAPI;
 - pytest and FastAPI TestClient;
 - Docker, Google Artifact Registry and Google Cloud Run;
@@ -256,18 +258,13 @@ python -m pip install --require-hashes -r requirements-dev.txt
 ```env
 EXPECTED_CALLER_SA=caller@your-project.iam.gserviceaccount.com
 SERVICE_AUDIENCE=https://insights-api.example.run.app
-ANTHROPIC_FEDERATION_RULE_ID=fdrl_replace_me
-ANTHROPIC_ORGANIZATION_ID=00000000-0000-0000-0000-000000000000
-ANTHROPIC_SERVICE_ACCOUNT_ID=svac_replace_me
-ANTHROPIC_WORKSPACE_ID=wrkspc_replace_me
 DEBUG=true
 ```
 
-None of these are secrets, and none of them work outside Google Cloud. Both
-directions of authentication need infrastructure the local machine does not
-have: incoming tokens are signed by Google, and outgoing ones come from the
-metadata server. A local instance therefore answers `403`, which is expected —
-verify behaviour with the test suite instead.
+Neither value is secret. Incoming authentication requires a Google-signed ID
+token. Outgoing Vertex AI calls use Application Default Credentials; locally,
+use an explicitly selected non-production ADC identity only for manual checks.
+The automated suite mocks Vertex AI and requires no credentials or network.
 
 4. Start the development server:
 
@@ -294,10 +291,6 @@ application mints the ID token itself and needs no shared credential.
 | --- | --- | --- |
 | `EXPECTED_CALLER_SA` | Yes | Service account email allowed to call this API |
 | `SERVICE_AUDIENCE` | Yes | Comma-separated `aud` values — this service's own addresses |
-| `ANTHROPIC_FEDERATION_RULE_ID` | Yes | `fdrl_*` federation rule |
-| `ANTHROPIC_ORGANIZATION_ID` | Yes | Anthropic organization UUID |
-| `ANTHROPIC_SERVICE_ACCOUNT_ID` | Yes | `svac_*` identity assumed at Anthropic |
-| `ANTHROPIC_WORKSPACE_ID` | Yes | `wrkspc_*` workspace the token is scoped to |
 | `DEBUG` | No | Enables `/docs` and `/redoc`; defaults to `false` |
 
 Every value is a non-secret identifier. The service has no API key and no
@@ -311,10 +304,10 @@ Run the complete suite:
 pytest tests/ -v
 ```
 
-The tests use placeholder settings and mock Anthropic. They cover the health
+The tests use placeholder settings and mock Vertex AI. They cover the health
 endpoint, service authentication, schema and note-budget limits, optional-text
-normalization, prompt construction, the untrusted-data boundary and the
-identity-token request that authenticates the service to Anthropic. No
+normalization, explicit response languages, prompt construction and the
+untrusted-data boundary. No
 credentials and no network access are required.
 
 ## Docker
@@ -349,16 +342,14 @@ The Environment accepts deployments only from `main`.
 
 Configure the environment variables listed above in the Cloud Run runtime
 environment. The service runs under a dedicated user-managed service account,
-which the deploy step names explicitly: the Anthropic federation rule is bound
-to that account's `sub` and `email`, so a silent fallback to the project
-default account would break authentication.
+which the deploy step names explicitly. That identity alone owns the custom
+Vertex inference role, so a fallback to the project default account fails closed.
 
 ## Project structure
 
 ```text
 app/
   core/
-    anthropic_auth.py     Identity token and Anthropic federation credentials
     caller_auth.py        Google ID token verification for the caller
     config.py             Environment-backed settings
     limiter.py            Source-IP rate limiter
@@ -369,7 +360,7 @@ app/
   routers/
     insights.py           Rate-limited /insights orchestration
   services/
-    ai.py                 Prompt construction and Anthropic call
+    ai.py                 Prompt construction and Vertex AI call
   main.py                 FastAPI app, middleware and error handlers
 bruno/                    Manual API collection
 tests/                    API and prompt-boundary tests

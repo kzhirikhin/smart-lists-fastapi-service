@@ -62,16 +62,12 @@ jobs:
 
       # Заведомо нерабочие значения. Нужны только чтобы прошла валидация
       # Settings при импорте приложения: до сети тесты не доходят — клиент
-      # Anthropic замокан, а settings подменяется фикстурой в conftest.py.
+      # Vertex AI замокан, а settings подменяется фикстурой в conftest.py.
       - name: Run tests
         run: pytest
         env:
           EXPECTED_CALLER_SA: test-caller@example.iam.gserviceaccount.com
           SERVICE_AUDIENCE: https://insights-api.example.run.app
-          ANTHROPIC_FEDERATION_RULE_ID: fdrl_test
-          ANTHROPIC_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000000
-          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_test
-          ANTHROPIC_WORKSPACE_ID: wrkspc_test
 
   deploy:
     needs: test
@@ -336,15 +332,13 @@ jobs:
               ((.files | length) == 1)
             ' "${attachment}" >/dev/null
 
-      # Сканер намеренно не блокирует выкладку. На 2026-08-20 в образе два
-      # critical и два high, и все четыре — `perl-base` базового Debian со
-      # статусом `not fixed`: гейт по severity останавливал бы каждый деплой,
-      # не давая ни одного действия, которое можно предпринять, и через месяц
-      # оброс бы ignore-правилами. Ценность шага в дельте: строка, которой
-      # вчера не было, видна в логе рядом с выкладкой, которая её принесла.
-      # `--only-fixed` оставляет лишь то, что вообще чинится обновлением.
+      # До deploy блокируем исправимые High/Critical: для них уже существует
+      # версия без уязвимости, поэтому продолжать выкладку нет оснований.
+      # `--only-fixed` намеренно не превращает ещё не исправленные CVE базового
+      # образа в вечный стоп-кран; полный набор независимо проверяет регулярный
+      # image-scan с exact-digest VEX/waiver policy. Любая техническая ошибка
+      # Grype или проверки checksum здесь остаётся fail-closed.
       - name: Scan image for known vulnerabilities
-        continue-on-error: true
         env:
           GRYPE_VERSION: 0.117.0
           # SHA-256 из официального grype_0.117.0_checksums.txt.
@@ -357,7 +351,7 @@ jobs:
             -o "${archive}"
           echo "${GRYPE_SHA256}  ${archive}" | sha256sum -c -
           sudo tar -xzf "${archive}" -C /usr/local/bin grype
-          grype "${IMAGE}@${DIGEST}" --only-fixed -o table
+          grype "${IMAGE}@${DIGEST}" --only-fixed --fail-on high -o table
 
       # Выкладка по digest, а не по тегу: тег — это имя, которое в реестре
       # можно переставить на другое содержимое, digest адресует сами байты.
@@ -366,7 +360,8 @@ jobs:
       # Личность указана явно, хотя `gcloud run deploy` и сохранил бы текущую.
       # Умолчание здесь — дефолтный compute service account проекта, общий для
       # всего проекта: пересоздание сервиса без этой строки тихо вернуло бы
-      # сервис на него, и правило федерации Anthropic перестало бы совпадать.
+      # сервис на него, и доступ к Vertex AI либо пропал бы, либо получил бы
+      # неизвестный blast radius другой identity.
       #
       # `--port` по той же причине: контейнер слушает 8000, а умолчание Cloud
       # Run — 8080. Сейчас порт держится состоянием сервиса, и пересоздание с

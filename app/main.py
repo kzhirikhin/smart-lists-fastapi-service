@@ -1,7 +1,7 @@
 import logging
 import time
 
-import anthropic
+from google.genai.errors import APIError
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -51,16 +51,18 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-@app.exception_handler(anthropic.APIStatusError)
-async def anthropic_error_handler(request: Request, exc: anthropic.APIStatusError):
-    # `exc.message` содержит полное тело ответа vendor. Оно не является
-    # доверенным и теоретически может повторить часть prompt, поэтому в лог
-    # идут только безопасные метаданные для корреляции.
+@app.exception_handler(APIError)
+async def vertex_error_handler(request: Request, exc: APIError):
+    # Тело и message vendor могут повторить часть prompt. В лог идут только
+    # безопасные метаданные, а наружу — единая обезличенная ошибка.
     logger.error(
-        "Anthropic API error: status=%d type=%s request_id=%s",
-        exc.status_code, exc.type, exc.request_id,
+        "Vertex AI API error: status=%s type=%s",
+        exc.code, type(exc).__name__,
     )
-    return JSONResponse(status_code=502, content={"detail": "AI service unavailable"})
+    return JSONResponse(
+        status_code=502,
+        content=dict(detail="AI provider request failed"),
+    )
 
 
 @app.exception_handler(ValueError)
