@@ -221,7 +221,7 @@ all of them are.
 
 ## Tech stack
 
-- Python 3.13;
+- Python 3.14;
 - FastAPI and Uvicorn;
 - Pydantic and pydantic-settings;
 - Google Gen AI Python SDK for Vertex AI;

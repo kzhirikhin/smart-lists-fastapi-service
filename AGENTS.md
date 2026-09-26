@@ -85,7 +85,7 @@
 
 ## Код и стиль
 
-- Целевая версия Python — 3.13; она должна совпадать в `Dockerfile` и GitHub
+- Целевая версия Python — 3.14; она должна совпадать в `Dockerfile` и GitHub
   Actions.
 - Используй современные type hints и конкретные типы. Не добавляй
   необоснованные `Any` и `# type: ignore`.
@@ -135,7 +135,7 @@
 - Пересобирай их в контейнере, чтобы окружение совпадало с CI и образом:
 
   ```bash
-  docker run --rm -v "$PWD:/src" -w /src python:3.13-slim sh -c '
+  docker run --rm -v "$PWD:/src" -w /src python:3.14-slim sh -c '
     pip install -q pip-tools
     pip-compile --generate-hashes --strip-extras --output-file=requirements.txt requirements.in
     pip-compile --generate-hashes --strip-extras --output-file=requirements-dev.txt requirements-dev.in'
