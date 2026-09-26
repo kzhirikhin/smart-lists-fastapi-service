@@ -29,8 +29,9 @@ legacy `ANTHROPIC_*` из Cloud Run, локальный Compose их больш�
 Cloud Run. Recurring image-scan run `36235469369` на новом digest был
 заблокирован 49 High-находками по 12 CVE в базовых пакетах Debian — все с
 `wont-fix`/`not-fixed`. После смены политики те же находки остаются в summary
-как advisory и gate не красят; replay отчёта даёт PASS, подтверждение живым
-run — после merge. Число старых ревизий повторно не инвентаризировано;
+как advisory и gate не красят. Post-merge run `36240283568` (PR #75)
+подтвердил это на том же digest: provenance и evidence PASS, gate PASS, один
+warning о 49 advisory High. Число старых ревизий повторно не инвентаризировано;
 автоматической уборки нет.
 
 System prompt требует короткие Markdown-рекомендации по незавершённым
