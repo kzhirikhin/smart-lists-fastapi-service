@@ -3,7 +3,8 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-09-26 (Python 3.14 и исправление AnyIO)
+**Последнее обновление:** 2026-09-26 (Python 3.14, исправление AnyIO,
+recurring image-scan блокирует только то, что можно исправить)
 
 **Состояние:** активная разработка
 
@@ -25,8 +26,12 @@ legacy `ANTHROPIC_*` из Cloud Run, локальный Compose их больш�
 32 ревизии эпохи Anthropic удалены. После PR #72 production-ревизия
 `insights-api-00060-bnx` обслуживает 100% трафика на Python 3.14 и AnyIO
 4.14.2; deploy run `36235087848` прошёл тесты, provenance, SBOM, Grype и
-Cloud Run. Отдельный recurring image-scan run `36235469369` на новом digest заблокирован: 49 High-находок по 12 CVE в базовых пакетах Debian без VEX/waiver. Это открытый operational alert, который разбирается по runbook. Число старых ревизий повторно не инвентаризировано; автоматической
-уборки нет.
+Cloud Run. Recurring image-scan run `36235469369` на новом digest был
+заблокирован 49 High-находками по 12 CVE в базовых пакетах Debian — все с
+`wont-fix`/`not-fixed`. После смены политики те же находки остаются в summary
+как advisory и gate не красят; replay отчёта даёт PASS, подтверждение живым
+run — после merge. Число старых ревизий повторно не инвентаризировано;
+автоматической уборки нет.
 
 System prompt требует короткие Markdown-рекомендации по незавершённым
 пунктам вместо пересказа списка; при вопросе пользователя отвечает на него
@@ -87,7 +92,8 @@ GHSA-82r6-8w77-94w6. Security gate не ослаблялся.
 - `.github/workflows/ci.yml` — тесты и full-history Gitleaks;
 - `.github/workflows/deploy.yml` — test-gated keyless deployment;
 - `.github/workflows/image-scan.yml` — еженедельный и ручной fail-closed scan
-  фактически обслуживающих Cloud Run digest;
+  фактически обслуживающих Cloud Run digest; красный run означает «есть что
+  исправить», неисправимые High — только warning;
 - `scripts/verify_image_evidence.py` — offline-проверка inspect/rootfs exact
   digest для технического обоснования VEX без запуска контейнера;
 - `security/SBOM_RUNBOOK.md` — границы контура и порядок разбора красного
@@ -293,8 +299,11 @@ Runtime identity имеет только custom role с `aiplatform.endpoints.pr
   через `--only-fixed --fail-on high`. Независимый `image-scan.yml` раз в неделю и вручную берёт из
   Cloud Run все revisions с трафиком или tag, разрешает их только в ожидаемые
   `${IMAGE}@sha256:<digest>` и сканирует без `--only-fixed`. Сырой JSON передаёт
-  `scripts/evaluate_image_scan.py`: High/Critical остаются блокирующими, кроме
-  exact CycloneDX VEX `not_affected` или действующего временного waiver.
+  `scripts/evaluate_image_scan.py`. Сначала применяются exact CycloneDX VEX
+  `not_affected` и действующие временные waiver, затем оставшееся делится:
+  Critical при любом fix state и High с `fixed`, пустым, `unknown` или
+  незнакомым state блокируют; High с явным `not-fixed`/`wont-fix` попадает в
+  `advisory`, свёрнутую таблицу summary и warning-аннотацию, но job не красит.
   Неактуальная база CVE, пустой список целей, повреждённая политика и любая
   техническая ошибка делают job красной. Raw и policy JSON сохраняются 30 дней.
 - `groups` — до 20 строк по 100 символов свободного текста, попадающего в
@@ -669,6 +678,15 @@ curl -X PATCH \
 
 ## Важные решения
 
+- 2026-09-26: recurring image-scan красит run только тем, что можно исправить.
+  Прежний gate на любой High без VEX/waiver был красным с 16.09 подряд: базовый
+  Debian постоянно несёт `wont-fix`/`not-fixed` High, а каждый deploy обнулял
+  exact VEX. Реальные сигналы — Critical в AnyIO и исправимый High в PCRE2 —
+  приходили тем же письмом, что и шум. Теперь неисправимые High уходят в
+  `advisory` и warning; Critical, исправимые High и High с неизвестным state
+  блокируют, как прежде. Компромисс — достижимая в runtime неисправимая High
+  больше не будит; он принят в модели угроз smart-lists. Привязка VEX к digest
+  не менялась и остаётся кандидатом на отдельное решение.
 - 2026-09-11: этап 7 подтвердил live-вызовы `gemini-3.5-flash-lite` на
   `ru`, `en`, `vi`, `ja` и synthetic peak из 150 задач с перекрёстными
   ссылками; отчёт хранит только метрики и SHA-256 ответа. 223 теста и
