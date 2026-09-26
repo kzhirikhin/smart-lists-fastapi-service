@@ -111,6 +111,26 @@ def _pins(filename: str) -> dict[str, str]:
     }
 
 
+class TestPythonVersionAlignment:
+    def test_runtime_builder_and_workflows_use_the_same_python(self) -> None:
+        dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        versions = re.findall(
+            r"^FROM python:(3\.\d+)-slim(?: AS builder)?$",
+            dockerfile,
+            re.MULTILINE,
+        )
+        assert len(versions) == 2
+        assert versions[0] == versions[1]
+        version = versions[0]
+
+        for name in ("ci.yml", "deploy.yml", "image-scan.yml"):
+            workflow = (WORKFLOWS_DIR / name).read_text(encoding="utf-8")
+            assert re.findall(r"python-version: '(3\.\d+)'", workflow) == [version]
+
+        assert f"/usr/local/lib/python{version}/site-packages/pip" in dockerfile
+        assert f"/usr/local/bin/pip{version}" in dockerfile
+
+
 class TestActionPins:
     """Actions закреплены по SHA.
 
@@ -704,7 +724,7 @@ class TestRecurringImageScan:
     def test_policy_is_loaded_from_reviewed_main_checkout(self, workflow: str) -> None:
         assert "actions/checkout@" in workflow
         assert "persist-credentials: false" in workflow
-        assert "python-version: '3.13'" in workflow
+        assert "python-version: '3.14'" in workflow
 
     def test_reports_survive_a_failed_gate(self, workflow: str) -> None:
         assert "if: always()" in workflow

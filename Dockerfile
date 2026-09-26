@@ -1,6 +1,6 @@
 # Сборочная стадия. Здесь работает pip и остаётся всё, что он тянет за собой;
 # в runtime-образ из этой стадии переезжают только сами пакеты.
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
 
 COPY requirements.txt /tmp/requirements.txt
 
@@ -20,10 +20,10 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --require-hashes --only-binary=:all: \
     --prefix=/install -r /tmp/requirements.txt
 
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 # Официальный образ пересобирается реже, чем Debian выпускает обновления
-# безопасности: на 2026-08-20 в python:3.13-slim не хватало util-linux
+# безопасности: на 2026-08-20 в тогдашнем python:3.13-slim не хватало util-linux
 # 2.41.5-0+deb13u1, уже выпущенного в trixie. Плавающий тег даёт последний
 # опубликованный образ, а не последние пакеты, поэтому обновляем явно.
 RUN apt-get update \
@@ -35,9 +35,9 @@ RUN apt-get update \
 # собственные вендоренные библиотеки, которых нет в requirements.txt и которые
 # иначе не убрать, — на 2026-08-20 это три HIGH в msgpack и setuptools.
 RUN python -m pip uninstall -y pip \
-    && rm -rf /usr/local/lib/python3.13/site-packages/pip \
-              /usr/local/lib/python3.13/site-packages/pip-*.dist-info \
-              /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.13
+    && rm -rf /usr/local/lib/python3.14/site-packages/pip \
+              /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+              /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14
 
 COPY --from=builder /install /usr/local
 
