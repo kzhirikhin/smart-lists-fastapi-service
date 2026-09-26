@@ -9,14 +9,19 @@ from pathlib import Path
 import pytest
 
 from scripts.evaluate_image_scan import (
+    ADVISORY_FIX_STATES,
+    ADVISORY_SEVERITIES,
     Finding,
     PackageKey,
     PolicyError,
     PolicyKey,
     Rule,
     evaluate,
+    load_findings,
     load_vex_rules,
     load_waiver_rules,
+    main,
+    render_summary,
 )
 
 NOW = datetime(2026, 8, 29, 15, tzinfo=UTC)
@@ -250,6 +255,144 @@ def test_vex_and_active_waiver_cannot_overlap() -> None:
 
     with pytest.raises(PolicyError, match="одновременно покрыта"):
         evaluate([_finding()], DIGEST, [vex], [waiver], [], NOW)
+
+
+def test_only_high_with_explicit_unfixable_state_is_advisory() -> None:
+    """Расширение послабления — осознанное изменение политики, а не правка константы."""
+    assert ADVISORY_FIX_STATES == {"not-fixed", "wont-fix"}
+    assert ADVISORY_SEVERITIES == {"High"}
+
+
+@pytest.mark.parametrize("state", ["not-fixed", "wont-fix"])
+def test_unfixable_high_is_reported_but_does_not_block(state: str) -> None:
+    finding = Finding(key=PACKAGE, severity="High", fix_state=state)
+
+    result = evaluate([finding], DIGEST, [], [], [], NOW)
+
+    assert result["gate"]["passed"] is True
+    assert result["remaining"] == []
+    assert result["summary"]["advisoryHigh"] == 1
+    assert result["advisory"][0]["fixState"] == state
+
+
+@pytest.mark.parametrize("state", ["fixed", "unknown", "", "some-future-state"])
+def test_high_with_fix_or_unclear_state_blocks(state: str) -> None:
+    """Неизвестное не считается неисправимым: gate ослабляется только явно."""
+    finding = Finding(key=PACKAGE, severity="High", fix_state=state)
+
+    result = evaluate([finding], DIGEST, [], [], [], NOW)
+
+    assert result["gate"]["passed"] is False
+    assert result["summary"]["remainingHigh"] == 1
+    assert result["advisory"] == []
+
+
+@pytest.mark.parametrize("state", ["not-fixed", "wont-fix", "fixed", ""])
+def test_critical_blocks_regardless_of_fix_state(state: str) -> None:
+    finding = Finding(key=PACKAGE, severity="Critical", fix_state=state)
+
+    result = evaluate([finding], DIGEST, [], [], [], NOW)
+
+    assert result["gate"]["passed"] is False
+    assert result["summary"]["remainingCritical"] == 1
+    assert result["advisory"] == []
+
+
+def test_vex_still_suppresses_unfixable_high() -> None:
+    rule = Rule(PolicyKey(DIGEST, PACKAGE), "vex_not_affected", "vex-1")
+    finding = Finding(key=PACKAGE, severity="High", fix_state="wont-fix")
+
+    result = evaluate([finding], DIGEST, [rule], [], [], NOW)
+
+    assert result["summary"]["vexSuppressed"] == 1
+    assert result["advisory"] == []
+
+
+def _grype_report(fix: object) -> dict:
+    vulnerability: dict[str, object] = {"id": PACKAGE.vulnerability_id, "severity": "High"}
+    if fix is not None:
+        vulnerability["fix"] = fix
+    return {
+        "matches": [
+            {
+                "vulnerability": vulnerability,
+                "artifact": {
+                    "name": PACKAGE.name,
+                    "version": PACKAGE.version,
+                    "purl": PACKAGE.purl,
+                },
+            }
+        ]
+    }
+
+
+def test_fix_state_and_versions_are_read_from_grype(tmp_path: Path) -> None:
+    path = tmp_path / "raw.json"
+    _write_json(path, _grype_report({"state": "fixed", "versions": ["2.41-12+deb13u4"]}))
+
+    [finding] = load_findings(path)
+
+    assert finding.fix_state == "fixed"
+    assert finding.fix_versions == ("2.41-12+deb13u4",)
+
+
+@pytest.mark.parametrize("fix", [None, "wont-fix", {"state": 1}, {"versions": []}])
+def test_malformed_or_missing_fix_blocks(tmp_path: Path, fix: object) -> None:
+    path = tmp_path / "raw.json"
+    _write_json(path, _grype_report(fix))
+
+    result = evaluate(load_findings(path), DIGEST, [], [], [], NOW)
+
+    assert result["gate"]["passed"] is False
+    assert result["summary"]["remainingHigh"] == 1
+
+
+def test_summary_lists_blocking_and_groups_advisory_findings() -> None:
+    other = PackageKey("CVE-2026-5450", "libc-bin", "2.41-12+deb13u3", PURL + "-bin")
+    findings = [
+        Finding(key=PACKAGE, severity="High", fix_state="wont-fix"),
+        Finding(key=other, severity="High", fix_state="wont-fix"),
+        Finding(
+            key=PackageKey("CVE-2026-1|x", "zlib1g", "1.3", "pkg:deb/debian/zlib1g@1.3"),
+            severity="Critical",
+            fix_state="fixed",
+            fix_versions=("1.3.1",),
+        ),
+    ]
+
+    summary = render_summary(evaluate(findings, DIGEST, [], [], [], NOW))
+
+    assert "Gate: **BLOCKED**" in summary
+    assert "High без исправления (не блокирует): 2" in summary
+    # Значение из отчёта не ломает таблицу, а одна CVE сворачивается в строку.
+    assert "| CVE-2026-1\\|x | Critical | zlib1g | 1.3 | fixed | 1.3.1 |" in summary
+    assert "| CVE-2026-5450 | wont-fix | libc-bin 2.41-12+deb13u3, libc6 2.41-12+deb13u3 |" in summary
+
+
+def test_main_warns_but_passes_on_unfixable_high_only(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    report = tmp_path / "raw.json"
+    _write_json(report, _grype_report({"state": "wont-fix", "versions": []}))
+    vex_dir = tmp_path / "vex"
+    vex_dir.mkdir()
+    waivers = tmp_path / "waivers.json"
+    _write_json(waivers, {"schemaVersion": 1, "waivers": []})
+
+    code = main(
+        [
+            "--report", str(report),
+            "--image-digest", DIGEST,
+            "--vex-dir", str(vex_dir),
+            "--waivers", str(waivers),
+            "--output", str(tmp_path / "policy.json"),
+            "--summary", str(tmp_path / "summary.md"),
+        ]
+    )
+
+    assert code == 0
+    assert "::warning::" in capsys.readouterr().out
+    assert "Gate: **PASS**" in (tmp_path / "summary.md").read_text(encoding="utf-8")
 
 
 def test_medium_never_needs_an_exception() -> None:

@@ -14,6 +14,15 @@ from uuid import UUID
 
 
 BLOCKING_SEVERITIES = {"High", "Critical"}
+# High без доступного исправления пересборкой не закрыть, поэтому красный run
+# по нему не требует действия и только прячет находки, которые его требуют.
+# Такие High остаются в отчёте, но gate не красят. Послабление узкое: Critical
+# блокирует при любом fix state, а отсутствующий, `unknown` или новый state
+# трактуется как блокирующий — неизвестное не превращается в «неисправимое».
+# Когда исправление выходит, база Grype меняет state на `fixed`, и та же
+# находка краснит run автоматически.
+ADVISORY_FIX_STATES = frozenset({"not-fixed", "wont-fix"})
+ADVISORY_SEVERITIES = frozenset({"High"})
 CVE = re.compile(r"^CVE-\d{4}-\d{4,}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 WAIVER_ID = re.compile(r"^WAIVER-\d{4}-\d{3,}$")
@@ -73,6 +82,16 @@ class Rule:
 class Finding:
     key: PackageKey
     severity: str
+    # Пустой state по умолчанию блокирует так же, как `unknown`.
+    fix_state: str = ""
+    fix_versions: tuple[str, ...] = ()
+
+    @property
+    def is_advisory(self) -> bool:
+        return (
+            self.severity in ADVISORY_SEVERITIES
+            and self.fix_state in ADVISORY_FIX_STATES
+        )
 
 
 def _read_json(path: Path, context: str) -> dict[str, object]:
@@ -233,10 +252,28 @@ def load_findings(report_path: Path) -> list[Finding]:
         # безопасно привязать невозможно.
         purl_value = artifact.get("purl")
         purl = purl_value.strip() if isinstance(purl_value, str) else ""
+        # Нераспознанная форма `fix` не ошибка отчёта, но и не повод ослаблять
+        # gate: state остаётся пустым, и находка блокирует.
+        fix = vulnerability.get("fix")
+        fix_state = ""
+        fix_versions: tuple[str, ...] = ()
+        if isinstance(fix, dict):
+            state_value = fix.get("state")
+            if isinstance(state_value, str):
+                fix_state = state_value.strip()
+            versions_value = fix.get("versions")
+            if isinstance(versions_value, list):
+                fix_versions = tuple(
+                    item.strip()
+                    for item in versions_value
+                    if isinstance(item, str) and item.strip()
+                )
         findings.append(
             Finding(
                 key=PackageKey(vulnerability_id, name, version, purl),
                 severity=severity,
+                fix_state=fix_state,
+                fix_versions=fix_versions,
             )
         )
     return findings
@@ -495,24 +532,29 @@ def evaluate(
 
     raw_critical = sum(item.severity == "Critical" for item in findings)
     raw_high = sum(item.severity == "High" for item in findings)
-    remaining: list[dict[str, str]] = []
-    suppressed: list[dict[str, str]] = []
-    expired_matches: list[dict[str, str]] = []
+    remaining: list[dict[str, object]] = []
+    advisory: list[dict[str, object]] = []
+    suppressed: list[dict[str, object]] = []
+    expired_matches: list[dict[str, object]] = []
 
     for finding in findings:
         if finding.severity not in BLOCKING_SEVERITIES:
             continue
         key = PolicyKey(image_digest=image_digest, package=finding.key)
         rule = vex_by_key.get(key) or waiver_by_key.get(key)
-        finding_json = {
+        finding_json: dict[str, object] = {
             "vulnerabilityId": finding.key.vulnerability_id,
             "severity": finding.severity,
             "packageName": finding.key.name,
             "packageVersion": finding.key.version,
             "purl": finding.key.purl,
+            "fixState": finding.fix_state,
+            "fixVersions": list(finding.fix_versions),
         }
         if rule is None:
-            remaining.append(finding_json)
+            # VEX и waiver применяются раньше классификации: доказанный
+            # not_affected остаётся подавленным и после появления исправления.
+            (advisory if finding.is_advisory else remaining).append(finding_json)
             for expired_rule in expired_by_key.get(key, []):
                 expired_matches.append(
                     {**finding_json, "waiverId": expired_rule.rule_id}
@@ -548,31 +590,101 @@ def evaluate(
                 item["severity"] == "Critical" for item in remaining
             ),
             "remainingHigh": sum(item["severity"] == "High" for item in remaining),
+            "advisoryHigh": len(advisory),
             "expiredWaiverMatches": len(expired_matches),
         },
         "suppressed": suppressed,
         "remaining": remaining,
+        "advisory": advisory,
         "expiredWaiverMatches": expired_matches,
     }
     return result
+
+
+def _cell(value: object) -> str:
+    """Значение из отчёта Grype как безопасная ячейка Markdown-таблицы."""
+    text = " ".join(str(value).split())
+    return text.replace("|", "\\|").replace("`", "'") or "—"
+
+
+def _finding_rows(items: list[object], context: str) -> list[str]:
+    rows = []
+    for index, item in enumerate(items):
+        finding = _object(item, f"{context}[{index}]")
+        versions = finding.get("fixVersions") or []
+        fixed_in = ", ".join(str(version) for version in _array(versions, context))
+        rows.append(
+            "| "
+            + " | ".join(
+                _cell(value)
+                for value in (
+                    finding["vulnerabilityId"],
+                    finding["severity"],
+                    finding["packageName"],
+                    finding["packageVersion"],
+                    finding.get("fixState", ""),
+                    fixed_in,
+                )
+            )
+            + " |"
+        )
+    return rows
+
+
+def _advisory_rows(items: list[object]) -> list[str]:
+    # Одна Debian CVE часто задевает десяток бинарных пакетов одного source:
+    # по строке на CVE сводка остаётся читаемой.
+    grouped: dict[tuple[str, str], list[str]] = {}
+    for index, item in enumerate(items):
+        finding = _object(item, f"result.advisory[{index}]")
+        key = (str(finding["vulnerabilityId"]), str(finding.get("fixState", "")))
+        grouped.setdefault(key, []).append(
+            f"{finding['packageName']} {finding['packageVersion']}"
+        )
+    return [
+        f"| {_cell(cve)} | {_cell(state)} | {_cell(', '.join(sorted(set(packages))))} |"
+        for (cve, state), packages in sorted(grouped.items())
+    ]
 
 
 def render_summary(result: dict[str, object]) -> str:
     summary = _object(result["summary"], "result.summary")
     gate = _object(result["gate"], "result.gate")
     status = "PASS" if gate["passed"] else "BLOCKED"
-    return "\n".join(
-        (
-            f"### Image scan policy — `{result['imageDigest']}`",
+    lines = [
+        f"### Image scan policy — `{result['imageDigest']}`",
+        "",
+        f"- До политики: Critical={summary['rawCritical']}, High={summary['rawHigh']}",
+        f"- Подавлено: VEX={summary['vexSuppressed']}, waiver={summary['waiverSuppressed']}",
+        f"- Блокирует: Critical={summary['remainingCritical']}, High={summary['remainingHigh']}",
+        f"- High без исправления (не блокирует): {summary['advisoryHigh']}",
+        f"- Совпало с истёкшим waiver: {summary['expiredWaiverMatches']}",
+        f"- Gate: **{status}**",
+        "",
+    ]
+    remaining = _array(result["remaining"], "result.remaining")
+    if remaining:
+        lines += [
+            "#### Блокирующие находки",
             "",
-            f"- До политики: Critical={summary['rawCritical']}, High={summary['rawHigh']}",
-            f"- Подавлено: VEX={summary['vexSuppressed']}, waiver={summary['waiverSuppressed']}",
-            f"- Осталось: Critical={summary['remainingCritical']}, High={summary['remainingHigh']}",
-            f"- Совпало с истёкшим waiver: {summary['expiredWaiverMatches']}",
-            f"- Gate: **{status}**",
+            "| CVE | Severity | Пакет | Версия | Fix state | Исправлено в |",
+            "|---|---|---|---|---|---|",
+            *_finding_rows(remaining, "result.remaining"),
             "",
-        )
-    )
+        ]
+    advisory = _array(result["advisory"], "result.advisory")
+    if advisory:
+        lines += [
+            "<details><summary>High без доступного исправления</summary>",
+            "",
+            "| CVE | Fix state | Пакеты |",
+            "|---|---|---|",
+            *_advisory_rows(advisory),
+            "",
+            "</details>",
+            "",
+        ]
+    return "\n".join(lines)
 
 
 def _write_json(path: Path, value: dict[str, object]) -> None:
@@ -622,6 +734,13 @@ def main(argv: list[str] | None = None) -> int:
 
     _write_json(args.output, result)
     args.summary.write_text(render_summary(result), encoding="utf-8")
+    advisory_count = _object(result["summary"], "result.summary")["advisoryHigh"]
+    if advisory_count:
+        # Аннотация видна в run, но письма о провале не рассылает.
+        print(
+            f"::warning::{args.image_digest}: High без доступного исправления — "
+            f"{advisory_count}; gate они не блокируют, список в job summary"
+        )
     return 0 if _object(result["gate"], "result.gate")["passed"] else 1
 
 

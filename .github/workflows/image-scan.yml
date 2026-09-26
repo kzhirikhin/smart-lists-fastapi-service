@@ -267,7 +267,9 @@ jobs:
       # rootfs exact digest без сети, runtime identity и исполнения его кода.
       # Grype без `--fail-on` отличает техническую ошибку от результата, а
       # отдельный policy evaluator применяет только exact VEX/waiver и решает
-      # high/critical gate. Ни техническую ошибку, ни провал evidence политика
+      # gate: блокируют Critical и High с исправлением или неизвестным fix
+      # state; High с `not-fixed`/`wont-fix` попадает в summary и warning, но
+      # run не красит. Ни техническую ошибку, ни провал evidence политика
       # подавить не может.
       - name: Scan every serving digest
         run: |

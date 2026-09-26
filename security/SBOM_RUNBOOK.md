@@ -11,7 +11,7 @@ images`; Artifact Registry хранит опись, но не принимает
 |---|---|---|
 | CycloneDX SBOM attachment | Опись Python- и системных пакетов конкретного image digest | Deploy, если SBOM нельзя создать, проверить или прикрепить |
 | Grype в `deploy.yml` | Исправимые CVE нового образа через `--only-fixed --fail-on high` | Deploy при High/Critical или технической ошибке |
-| `image-scan.yml` | Еженедельная, ручная и policy-triggered проверка всех traffic/tagged Cloud Run digest | Свой workflow при High/Critical или технической ошибке |
+| `image-scan.yml` | Еженедельная, ручная и policy-triggered проверка всех traffic/tagged Cloud Run digest | Свой workflow при Critical, High с исправлением или неизвестным fix state, технической ошибке. High с `not-fixed`/`wont-fix` — только warning и таблица в summary |
 | Runtime evidence | Воспроизводимые факты о конфигурации, пакетах и путях исполнения exact digest без запуска контейнера | Тот же workflow при несовпадении или технической ошибке |
 | CycloneDX VEX | Доказанный `not_affected` для одной exact-находки | Ничего сам по себе; применяется policy evaluator |
 | Временный waiver | Явное принятие реального риска максимум на 30 дней | Ничего сам по себе; применяется policy evaluator |
@@ -23,7 +23,27 @@ PR и следующий deploy он автоматически не запре�
 успехом или закрывать пустым ignore — он остаётся видимым до исправления,
 доказанного VEX либо явно принятого временного waiver.
 
-После deploy run `36235087848` recurring run `36235469369` проверил дочерний runtime digest `sha256:bdc45b2…85cb6469`: 49 High-находок по 12 CVE в базовых пакетах Debian, ноль VEX и waiver, gate BLOCKED. Это текущий открытый сигнал; pre-deploy gate с `--only-fixed` для той же выкладки прошёл.
+**Почему неисправимые High не красят run (с 2026-09-26).** До этого любой High
+без VEX/waiver держал run красным. Базовый Debian почти всегда несёт High со
+статусом `wont-fix`/`not-fixed`, которые пересборкой не закрыть, поэтому run
+был красным с 16.09 по 26.09 подряд, а реальные сигналы — Critical в AnyIO и
+исправимый High в PCRE2 — приходили тем же письмом «failed», что и шум. Каждый
+deploy меняет digest и обнуляет exact VEX, поэтому держать gate зелёным можно
+было только повторным разбором десятков statements после каждой выкладки.
+
+Теперь красный run означает «есть что исправить»: Critical при любом fix state,
+High с доступным исправлением и High с отсутствующим или неизвестным state.
+High с явным `not-fixed`/`wont-fix` остаётся в policy JSON (`advisory`), в
+свёрнутой таблице job summary и в warning-аннотации, но письма о провале не
+вызывает. Как только Debian выпускает исправление, Grype меняет state на
+`fixed` и та же находка краснит run без чьего-либо участия. Принятый остаток:
+неисправимая High, реально достижимая в runtime, видна только в summary; он
+записан в модели угроз smart-lists.
+
+Replay нового evaluator на сохранённых отчётах: `36235469369`
+(`sha256:bdc45b2…85cb6469`) даёт PASS с 49 advisory High по 12 CVE; `35837578866`
+остаётся BLOCKED ровно на двух исправимых пунктах (AnyIO GHSA-82r6-8w77-94w6 и
+CPython 3.13); `35074278652` — на одном PCRE2 CVE-2026-89161.
 
 ## Как разбирать красный run
 
@@ -38,8 +58,12 @@ PR и следующий deploy он автоматически не запре�
    - `Evidence: FAIL` или exit code `1` у runtime evidence — факты exact image
      не соответствуют ожидаемым. VEX по этим фактам запрещён: сначала разобрать
      расхождение и повторить run;
-   - `Gate: BLOCKED` или exit code `1` — после политики остались High/Critical.
-     Разбирать массив `remaining` из policy JSON.
+   - `Gate: BLOCKED` или exit code `1` — после политики остались блокирующие
+     находки. Они перечислены таблицей в job summary и массивом `remaining` в
+     policy JSON; колонка «Исправлено в» говорит, до какой версии обновлять.
+   Warning о High без исправления без `BLOCKED` не требует немедленного
+   действия; список `advisory` стоит просматривать при каждом deploy и при
+   появлении в нём новых CVE.
 4. Для каждой оставшейся exact-находки выбрать ровно один путь:
    - обновить базовый образ, прямую или транзитивную зависимость и пересобрать;
    - оформить CycloneDX VEX, только если exploit path проверен и доказан
