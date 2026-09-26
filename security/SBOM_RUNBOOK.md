@@ -10,17 +10,20 @@ images`; Artifact Registry хранит опись, но не принимает
 | Часть | Назначение | Блокирует |
 |---|---|---|
 | CycloneDX SBOM attachment | Опись Python- и системных пакетов конкретного image digest | Deploy, если SBOM нельзя создать, проверить или прикрепить |
-| Grype в `deploy.yml` | Быстрая информационная дельта исправимых CVE новой сборки | Ничего: шаг имеет `continue-on-error` |
+| Grype в `deploy.yml` | Исправимые CVE нового образа через `--only-fixed --fail-on high` | Deploy при High/Critical или технической ошибке |
 | `image-scan.yml` | Еженедельная, ручная и policy-triggered проверка всех traffic/tagged Cloud Run digest | Свой workflow при High/Critical или технической ошибке |
 | Runtime evidence | Воспроизводимые факты о конфигурации, пакетах и путях исполнения exact digest без запуска контейнера | Тот же workflow при несовпадении или технической ошибке |
 | CycloneDX VEX | Доказанный `not_affected` для одной exact-находки | Ничего сам по себе; применяется policy evaluator |
 | Временный waiver | Явное принятие реального риска максимум на 30 дней | Ничего сам по себе; применяется policy evaluator |
 
-`Gate: BLOCKED` относится к конкретному image-scan run. Это operational alert,
-а не required check PR и не release gate: коммиты, зелёный PR и следующий
-deploy он автоматически не запрещает. Красный run при этом нельзя считать
+`Gate: BLOCKED` относится к конкретному recurring image-scan run. Это
+operational alert, а не required check PR и не release gate: коммиты, зелёный
+PR и следующий deploy он автоматически не запрещает. Pre-deploy Grype —
+отдельный обязательный gate для исправимых High/Critical. Красный run при этом нельзя считать
 успехом или закрывать пустым ignore — он остаётся видимым до исправления,
 доказанного VEX либо явно принятого временного waiver.
+
+После deploy run `36235087848` recurring run `36235469369` проверил дочерний runtime digest `sha256:bdc45b2…85cb6469`: 49 High-находок по 12 CVE в базовых пакетах Debian, ноль VEX и waiver, gate BLOCKED. Это текущий открытый сигнал; pre-deploy gate с `--only-fixed` для той же выкладки прошёл.
 
 ## Как разбирать красный run
 
