@@ -43,7 +43,9 @@ High с явным `not-fixed`/`wont-fix` остаётся в policy JSON (`advi
 Replay нового evaluator на сохранённых отчётах: `36235469369`
 (`sha256:bdc45b2…85cb6469`) даёт PASS с 49 advisory High по 12 CVE; `35837578866`
 остаётся BLOCKED ровно на двух исправимых пунктах (AnyIO GHSA-82r6-8w77-94w6 и
-CPython 3.13); `35074278652` — на одном PCRE2 CVE-2026-89161.
+CPython 3.13); `35074278652` — на одном PCRE2 CVE-2026-89161. Живой
+post-merge run `36240283568` на том же `bdc45b2` завершился успехом с одним
+warning о 49 advisory High; deploy при этом не запускался.
 
 ## Как разбирать красный run
 
