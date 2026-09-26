@@ -13,6 +13,7 @@ required check.
 from __future__ import annotations
 
 import re
+import ssl
 from pathlib import Path
 
 import pytest
@@ -112,6 +113,12 @@ def _pins(filename: str) -> dict[str, str]:
 
 
 class TestPythonVersionAlignment:
+    def test_runtime_tls_defaults_remain_strict(self) -> None:
+        context = ssl.create_default_context()
+        assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname
+
     def test_runtime_builder_and_workflows_use_the_same_python(self) -> None:
         dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
         versions = re.findall(
