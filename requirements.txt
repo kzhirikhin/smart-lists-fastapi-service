@@ -293,9 +293,9 @@ google-auth==2.58.0 \
     # via
     #   -r requirements.in
     #   google-genai
-google-genai==2.24.0 \
-    --hash=sha256:59e5f2d88bc2d6ed04aa1aa14cb5629090cfe9458401745e620b24d1fe9893d7 \
-    --hash=sha256:814b63d05dca4776c5a322699eb30c565040cf8d5fd77c38714076535fb2e019
+google-genai==2.25.0 \
+    --hash=sha256:2e8f3a5f76ed00d5ffc3153f6089bc7d3511054eed53ad9cfc6095a7dc59b028 \
+    --hash=sha256:ab603baa5eee0205926ad0f8d7f93e0400df6d67650e99c33e01ab228ea16ad6
     # via -r requirements.in
 h11==0.16.0 \
     --hash=sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1 \
