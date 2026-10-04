@@ -3,8 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-09-26 (Python 3.14, исправление AnyIO,
-recurring image-scan блокирует только то, что можно исправить)
+**Последнее обновление:** 2026-10-04 (выдержанные обновления Python-зависимостей)
 
 **Состояние:** активная разработка
 
@@ -51,11 +50,11 @@ System prompt требует короткие Markdown-рекомендации 
 ## Актуальный стек
 
 - Python 3.14;
-- FastAPI `0.141.1`, Starlette `1.3.1`, Uvicorn `0.52.4`;
-- Pydantic `2.12.5` и pydantic-settings `2.15.0`;
-- Google Gen AI SDK `2.20.0` для асинхронного вызова Vertex AI;
+- FastAPI `0.141.1`, Starlette `1.7.0`, Uvicorn `0.54.0`;
+- Pydantic `2.13.5` и pydantic-settings `2.15.0`;
+- Google Gen AI SDK `2.25.0` для асинхронного вызова Vertex AI;
 - SlowAPI `0.1.10`;
-- google-auth `2.56.3` и requests `2.34.2` — проверка входящих Google
+- google-auth `2.58.1` и requests `2.34.2` — проверка входящих Google
   ID-токенов; исходящий SDK использует ADC runtime service account;
 - pytest `9.1.1`, pytest-asyncio `1.4.0` и FastAPI TestClient;
 - Docker, Google Artifact Registry и Google Cloud Run;
@@ -67,8 +66,20 @@ System prompt требует короткие Markdown-рекомендации 
 Инструментарий тестов в production-образ не попадает. Python version должна
 совпадать в `Dockerfile`, `ci.yml`, `deploy.yml` и `image-scan.yml`.
 Переход с Python 3.13 на 3.14 устраняет блокирующий deploy scan
-CVE-2026-82049 в `tarfile`; AnyIO закреплён на исправленной 4.14.2 против
+CVE-2026-82049 в `tarfile`; AnyIO закреплён на 4.15.1, выше исправленной 4.14.2 против
 GHSA-82r6-8w77-94w6. Security gate не ослаблялся.
+
+Обновление 2026-10-04 сохраняет FastAPI 0.141.1 и httpx 0.28.1. Кроме версий
+стека выше, lock содержит AnyIO 4.15.1, cryptography 50.0.1, python-dotenv 1.2.3,
+pydantic-core 2.46.5 и typing-extensions 4.16.0. Дополнительно обновлены выдержанные
+транзитивные зависимости TLS, HTTP, валидации и инструментария тестов.
+Все изменённые версии выдержаны не менее семи дней; новые релизы,
+Deprecated 3 и websockets 17 не приняты.
+Lock-файлы пересобраны pip-compile в Linux Python 3.14; hash-установка только
+wheel, pip check и 248 тестов прошли в чистом контейнере. Контракт API,
+проверки вызывающего, бюджеты, prompt и полномочия runtime identity сохранены.
+Production-состояние в начале документа относится к последней подтверждённой
+выкладке; новая serving revision подтверждается отдельно после deploy.
 
 ## Карта репозитория
 
