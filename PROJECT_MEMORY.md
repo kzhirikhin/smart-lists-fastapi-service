@@ -89,8 +89,8 @@ attestation, SBOM и pre-deploy Grype. Digest
 37185456034 прошёл provenance, runtime evidence и gate на serving-child
 `sha256:597192693542c0646a55f83c21d6968bfb99b63f7d16758869ff88448c58753a`:
 Critical=0, блокирующие High=0, 55 неисправимых High остаются advisory,
-VEX/waiver=0. Живой ответ Vertex AI после обновления ожидает
-проверки владельцем, браузер агента недоступен.
+VEX/waiver=0. Владелец 2026-10-04 подтвердил, что AI-инсайты через
+production-интерфейс работают после обновления.
 
 ## Карта репозитория
 
