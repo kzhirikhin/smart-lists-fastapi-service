@@ -22,7 +22,7 @@ web-приложения Smart Lists. Он получает ограниченн
 С 2026-09-18 production обслуживает Vertex AI, а прежний канал закрыт целиком:
 владелец архивировал внешнее правило federation, deploy workflow убрал четыре
 legacy `ANTHROPIC_*` из Cloud Run, локальный Compose их больше не передаёт, а
-32 ревизии эпохи Anthropic удалены. После PR #72 production-ревизия
+32 ревизии эпохи Anthropic удалены. До обновления 2026-10-04 production-ревизия после PR #72
 `insights-api-00060-bnx` обслуживает 100% трафика на Python 3.14 и AnyIO
 4.14.2; deploy run `36235087848` прошёл тесты, provenance, SBOM, Grype и
 Cloud Run. Recurring image-scan run `36235469369` на новом digest был
@@ -76,10 +76,21 @@ pydantic-core 2.46.5 и typing-extensions 4.16.0. Дополнительно о�
 Все изменённые версии выдержаны не менее семи дней; новые релизы,
 Deprecated 3 и websockets 17 не приняты.
 Lock-файлы пересобраны pip-compile в Linux Python 3.14; hash-установка только
-wheel, pip check и 248 тестов прошли в чистом контейнере. Контракт API,
+wheel, pip check, 248 тестов и production build прошли в чистом контейнере.
+Uvicorn smoke: /health=200, /docs=404, /insights без токена=403 до разбора body.
+Runtime TLS: минимум 1.2, обязательная проверка сертификата и имени;
+проверенные TLS-handshake к aiplatform.googleapis.com и www.googleapis.com
+завершились на TLS 1.3 без credentials и пользовательского payload. Контракт API,
 проверки вызывающего, бюджеты, prompt и полномочия runtime identity сохранены.
-Production-состояние в начале документа относится к последней подтверждённой
-выкладке; новая serving revision подтверждается отдельно после deploy.
+PR #78 влит: deploy run 37185259888 прошёл test, provenance, keyless
+attestation, SBOM и pre-deploy Grype. Digest
+`sha256:18e75d3fc3482d38e94f1a40d92c4d0328f6fec1057757a1da3c3dde834141fa`
+развёрнут в insights-api-00064-8hh со 100% трафика. Read-only image-scan
+37185456034 прошёл provenance, runtime evidence и gate на serving-child
+`sha256:597192693542c0646a55f83c21d6968bfb99b63f7d16758869ff88448c58753a`:
+Critical=0, блокирующие High=0, 55 неисправимых High остаются advisory,
+VEX/waiver=0. Живой ответ Vertex AI после обновления ожидает
+проверки владельцем, браузер агента недоступен.
 
 ## Карта репозитория
 
