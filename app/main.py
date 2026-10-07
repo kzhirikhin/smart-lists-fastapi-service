@@ -24,6 +24,15 @@ logger = logging.getLogger(__name__)
 # ровно та половинчатость, которую документ называет «закрыто не там, где сломано».
 app = FastAPI(
     title="Smart Lists AI Service",
+    # Не передаём данные запросов/ошибок глобальным OTel-провайдерам и не
+    # подключаем экспортёр через окружение. Нативная телеметрия появилась в 0.142.
+    telemetry={
+        "tracing": False,
+        "metrics": False,
+        "logs": False,
+        "operation_spans": False,
+        "auto_configure": False,
+    },
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
     openapi_url="/openapi.json" if settings.debug else None,
