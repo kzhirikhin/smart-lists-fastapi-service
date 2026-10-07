@@ -1,7 +1,9 @@
 # Прямые runtime-зависимости — единственный файл, который правится руками.
 # Всё остальное в requirements.txt разворачивает pip-compile, включая хеши.
 # Команда пересборки — в AGENTS.md, раздел «Зависимости».
-fastapi==0.141.1
+fastapi==0.142.2
+# Новая обязательная API-зависимость FastAPI; свежий 1.45.1 пока не выдержан.
+opentelemetry-api==1.45.0
 google-genai==2.25.0
 google-auth==2.58.1
 pydantic-settings==2.15.0

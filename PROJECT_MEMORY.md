@@ -3,7 +3,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-10-04 (выдержанные обновления Python-зависимостей)
+**Последнее обновление:** 2026-10-07 (FastAPI и запрет нативной телеметрии)
 
 **Состояние:** активная разработка
 
@@ -50,7 +50,7 @@ System prompt требует короткие Markdown-рекомендации 
 ## Актуальный стек
 
 - Python 3.14;
-- FastAPI `0.141.1`, Starlette `1.7.0`, Uvicorn `0.54.0`;
+- FastAPI `0.142.2`, Starlette `1.7.0`, Uvicorn `0.54.0`;
 - Pydantic `2.13.5` и pydantic-settings `2.15.0`;
 - Google Gen AI SDK `2.25.0` для асинхронного вызова Vertex AI;
 - SlowAPI `0.1.10`;
@@ -60,6 +60,17 @@ System prompt требует короткие Markdown-рекомендации 
 - Docker, Google Artifact Registry и Google Cloud Run;
 - GitHub Actions, GitHub OIDC и Google Workload Identity Federation;
 - Grype `0.117.0` для deploy-time и еженедельного image scanning.
+
+FastAPI 0.142 добавляет нативную OpenTelemetry-интеграцию. В `FastAPI(...)`
+явно выключены tracing, metrics, logs, operation_spans и auto_configure:
+запросы и ошибки не передаются глобальным OTel-провайдерам, а окружение не
+подключает OTLP-экспортёр. Новый обязательный `opentelemetry-api` закреплён
+на выдержанной 1.45.0; SDK и экспортёры не установлены. `test_telemetry.py`
+проверяет health, отказ без токена, ошибку валидации и необработанное исключение
+при заданном OTLP endpoint и доступных глобальных провайдерах. Установка
+wheel с проверкой хешей, pip check и 249 тестов прошли на Python 3.14/Linux.
+Остальные версии в lock сохранены. Для пересборки используется pip 25.3 с
+pip-tools 7.5.3: новый pip 26 несовместим с этим pip-tools.
 
 Руками правятся только `requirements.in` и `requirements-dev.in`; полные
 наборы с версиями и SHA-256 каждого артефакта разворачивает pip-compile.
