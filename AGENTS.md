@@ -136,11 +136,14 @@
 
   ```bash
   docker run --rm -v "$PWD:/src" -w /src python:3.14-slim sh -c '
-    pip install -q pip-tools
-    pip-compile --generate-hashes --strip-extras --output-file=requirements.txt requirements.in
-    pip-compile --generate-hashes --strip-extras --output-file=requirements-dev.txt requirements-dev.in'
+    pip install -q --only-binary=:all: pip==25.3 pip-tools==7.5.3
+    pip-compile --generate-hashes --strip-extras --pip-args="--only-binary=:all:" --output-file=requirements.txt requirements.in
+    pip-compile --generate-hashes --strip-extras --pip-args="--only-binary=:all:" --output-file=requirements-dev.txt requirements-dev.in'
   ```
 
+- pip 25.3 закреплён для совместимости с pip-tools 7.5.3: с pip 26 этот
+  компилятор падает на изменившемся API. Это инструменты пересборки lock,
+  а не runtime-зависимости сервиса.
 - Без `--upgrade` pip-compile сохраняет версии, уже записанные в выходном
   файле, и меняет только то, что затронуто правкой `.in`. Обновление версий —
   отдельное намеренное действие через `--upgrade-package <имя>`, с проверкой
