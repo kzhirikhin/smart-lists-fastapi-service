@@ -7,6 +7,18 @@
 
 **Состояние:** активная разработка
 
+Статусы и приоритет начатой работы выложены 2026-10-09 (PR #82, commit
+`6fe8886732a00f3ec404f4c2b38173c774497304`). Deploy run `37928395592` прошёл
+275 тестов, provenance, attestation, SBOM и pre-deploy Grype; новая ревизия
+`insights-api-00066-vbw` получила 100% production-трафика. Read-only scan
+`37928852323` подтвердил подпись и связь OCI parent
+`sha256:2fe834ce497a13afc2d76142c07a71ada7bb0e8e7c839adb603ca8e048d2d8bc`
+с serving-child
+`sha256:4e0d9942e93bd7b2fc352731eb712f1c10ca738f2826976119a6f663943dd616`:
+gate PASS, Critical=0, блокирующие High=0, 55 High без исправления остаются
+advisory по A100; VEX/waiver=0. Реальные ответы через пользовательский
+интерфейс после этого обновления пока не подтверждены.
+
 Security-review рабочего digest `sha256:16b779dd…fa79ea` от 2026-09-07:
 Grype нашёл 27 уникальных CVE / 65 High/Critical package matches; прежние VEX
 не относятся к этому образу. Offline evidence расширен с 21 до 27 candidate
