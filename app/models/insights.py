@@ -7,6 +7,7 @@ MAX_NOTE_LENGTH = 4_000
 MAX_ITEM_NOTES = 10
 MAX_ITEM_NOTES_CHARS = 8_000
 MAX_SUB_ITEMS = 100
+ItemStatus = Literal["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]
 ResponseLanguage = Literal["ru", "vi", "en", "ja"]
 
 
@@ -19,15 +20,21 @@ def normalize_optional_text(value: object) -> object:
 
 
 class SubItem(BaseModel):
-    """Подпункт: часть своего пункта, собственных подпунктов иметь не может.
-
-    Отдельная модель, а не рекурсивная ссылка на `ListItem`: вложенность в
-    контракте ровно одна, и выразить это типом надёжнее, чем проверкой глубины.
-    """
+    """Подпункт без следующего уровня вложенности."""
 
     name: str = Field(min_length=1, max_length=200)
     is_completed: bool
+    status: ItemStatus | None = None
     note: Optional[str] = Field(default=None, max_length=MAX_NOTE_LENGTH)
+
+    @model_validator(mode="after")
+    def normalize_status(self) -> "SubItem":
+        """Старый клиент передаёт завершённость; новый — согласованную пару."""
+        if self.status is None:
+            self.status = "COMPLETED" if self.is_completed else "NOT_STARTED"
+        elif (self.status == "COMPLETED") != self.is_completed:
+            raise ValueError("status and is_completed must agree")
+        return self
 
     @field_validator("note", mode="before")
     @classmethod
@@ -35,18 +42,9 @@ class SubItem(BaseModel):
         return normalize_optional_text(value)
 
 
-class ListItem(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    is_completed: bool
-    note: Optional[str] = Field(default=None, max_length=MAX_NOTE_LENGTH)
-    # default_factory, а не обязательное поле: вызывающая сторона могла быть
-    # выпущена до подпунктов, и запрос без этого ключа обязан работать.
+class ListItem(SubItem):
+    # Контракт статуса и заметки общий, но следующий уровень есть только у пункта.
     sub_items: list[SubItem] = Field(default_factory=list, max_length=MAX_SUB_ITEMS)
-
-    @field_validator("note", mode="before")
-    @classmethod
-    def strip_note(cls, value: object) -> object:
-        return normalize_optional_text(value)
 
 
 class NotesMeta(BaseModel):
