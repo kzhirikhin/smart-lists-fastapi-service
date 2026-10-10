@@ -12,6 +12,17 @@
 
 **Состояние:** активная разработка
 
+Статус `DEFERRED` опубликован 2026-10-10: PR #84, commit
+`1e5d11a0f6e8039119c712d09f48dc8eca65b89f`, deploy run `38019285663`.
+Ревизия `insights-api-00067-dg6` обслуживает 100% production-трафика.
+Read-only scan `38019872802` подтвердил provenance OCI parent
+`sha256:93e140c246a2b3559766abd000ce4c5525bfb4cb3452ce7c2badbf94d10d0c44`
+и serving-child
+`sha256:d359deadf8d244e4e34eee4c56c55736d6b17709e39d4400b6b04a8952eac6c0`:
+evidence и policy gate PASS, Critical=0, блокирующие High=0; 55 High без
+доступного исправления остаются advisory по A100, VEX/waiver=0. Реальные
+ответы модели с DEFERRED пока не проверены.
+
 Статусы и приоритет начатой работы выложены 2026-10-09 (PR #82, commit
 `6fe8886732a00f3ec404f4c2b38173c774497304`). Deploy run `37928395592` прошёл
 275 тестов, provenance, attestation, SBOM и pre-deploy Grype; новая ревизия
@@ -165,7 +176,8 @@ production-интерфейс работают после обновления.
 
 ### `GET /health`
 
-- публичный liveness endpoint;
+- liveness endpoint без проверки токена в FastAPI; в production доступ
+  ограничивает Cloud Run IAM, анонимный внешний запрос получает 403;
 - возвращает `{"status": "ok"}`;
 - не проверяет Vertex AI и другие внешние зависимости;
 - исключён из обычного request log.
@@ -304,7 +316,9 @@ service account `insights-api-runtime`; API key и отдельный секре
 Runtime identity имеет только custom role с `aiplatform.endpoints.predict`.
 
 - Токен существует только на серверной стороне и живёт около часа.
-- `/health` публичен по назначению; `/insights` без корректного header не
+- `/health` не требует токена на уровне FastAPI, но закрыт Cloud Run IAM
+  для анонимного внешнего запроса (403 повторно проверен 2026-10-10);
+  `/insights` без корректного header не
   вызывает Vertex AI.
 - Проверка подписи требует публичных ключей Google: библиотека забирает их по
   сети и кеширует, поэтому первая проверка после холодного старта ходит наружу.
