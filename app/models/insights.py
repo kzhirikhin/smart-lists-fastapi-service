@@ -7,7 +7,7 @@ MAX_NOTE_LENGTH = 4_000
 MAX_ITEM_NOTES = 10
 MAX_ITEM_NOTES_CHARS = 8_000
 MAX_SUB_ITEMS = 100
-ItemStatus = Literal["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]
+ItemStatus = Literal["NOT_STARTED", "IN_PROGRESS", "DEFERRED", "COMPLETED"]
 ResponseLanguage = Literal["ru", "vi", "en", "ja"]
 
 
