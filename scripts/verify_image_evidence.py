@@ -62,6 +62,9 @@ RELEVANT_PACKAGES = {
     "libmount1",
     "zlib1g",
     "libpcre2-8-0",
+    "gcc-14-base",
+    "libgcc-s1",
+    "libstdc++6",
 }
 
 PROCESS_MODULES = {"subprocess", "pexpect"}
@@ -108,6 +111,8 @@ GLIBC_UNGETWC_MARKERS = (b"ungetwc", b"libstdc++.so.6")
 # Сканируется вся /app + /usr/local, включая установленные зависимости и ELF,
 # а не только исходники приложения. Символы ловят также строки для dlsym.
 RUNTIME_NATIVE_MARKERS = {
+    "libstdcpp_runtime_surface_absent": (b"libstdc++", b"GLIBCXX_", b"CXXABI_"),
+    "glibc_strfmon_runtime_surface_absent": (b"strfmon",),
     "libmount_runtime_surface_absent": (b"libmount.so", b"mnt_context_mount"),
     "pcre2_runtime_surface_absent": (b"libpcre2-", b"pcre2_dfa_match"),
     "zlib_gzwrite_runtime_surface_absent": (
@@ -117,6 +122,17 @@ RUNTIME_NATIVE_MARKERS = {
 
 # В отчёте явно видно, какие проверки поддерживают будущий VEX.
 CLAIM_CHECKS: dict[str, tuple[str, ...]] = {
+    "CVE-2026-95619": (
+        "runtime_entrypoint_exact", "application_no_process_execution",
+        "application_no_native_library_loading", "native_elf_parseable",
+        "libstdcpp_runtime_surface_absent",
+    ),
+    "CVE-2026-19499": (
+        "runtime_entrypoint_exact", "application_no_process_execution",
+        "application_no_native_library_loading", "native_elf_parseable",
+        "glibc_strfmon_runtime_surface_absent",
+    ),
+    "CVE-2026-82560": ("perl_extended_packages_absent", "perl_pod_text_absent"),
     "CVE-2026-76642": (
         "runtime_non_root", "runtime_entrypoint_exact",
         "application_no_process_execution", "application_no_native_library_loading",
@@ -569,6 +585,12 @@ def verify_image(
                 else f"{description}: найдено {matches[:3]!r}",
             )
 
+        absent(
+            "perl_pod_text_absent",
+            lambda name: name.endswith(("/Pod/Text.pm", "/Pod/Text.pmc"))
+            or "/Pod/Text/" in f"/{name}",
+            "Pod::Text и его подклассы",
+        )
         absent(
             "perl_archive_tar_absent",
             lambda name: name.endswith("/Archive/Tar.pm"),

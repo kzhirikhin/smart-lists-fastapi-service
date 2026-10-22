@@ -110,6 +110,16 @@ IAM 403 без токена. Владелец 2026-10-22 подтвердил: A
 
 ## Актуальный стек
 
+Разбор advisory High от 2026-10-22:
+`security/reviews/2026-10-22-serving-image.md`. В scan `39732626472`
+55 совпадений относятся к 14 CVE: десять имеют прежние разборы, четыре
+дополнительно сверены с upstream. Для strfmon, libstdc++ aligned new и
+Pod::Text добавлены candidate checks; их запуск на serving rootfs ещё
+не подтверждён. PBDS erase_if — header-only: отсутствие libstdc++ не
+доказывает отсутствия статической копии; автоматический claim не добавлен.
+VEX/waiver не менялись, все 55 остаются advisory по A100. Исследование sdist
+шести native-зависимостей не нашло PBDS, но не доказывает байты wheel.
+
 - Python 3.14;
 - FastAPI `0.142.2`, Starlette `1.7.0`, Uvicorn `0.54.0`;
 - Pydantic `2.13.5` и pydantic-settings `2.15.0`;

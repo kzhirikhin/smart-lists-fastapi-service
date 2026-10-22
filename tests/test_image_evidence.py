@@ -143,7 +143,7 @@ def test_safe_exact_image_passes_with_glibc_claims(tmp_path: Path) -> None:
     assert report["status"] == "PASS"
     assert all(_checks(report).values())
     claims = report["candidateClaims"]
-    assert len(claims) == len(CLAIM_CHECKS) == 27
+    assert len(claims) == len(CLAIM_CHECKS) == 30
     assert all(item["checksPassed"] for item in claims)
     assert {"CVE-2026-5435", "CVE-2026-5450", "CVE-2026-5928"} <= {
         item["vulnerabilityId"] for item in claims
@@ -411,3 +411,58 @@ def test_mount_command_literal_invalidates_runtime_claim(tmp_path: Path, command
     report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
     assert report['status'] == 'FAIL'
     assert not _checks(report)['application_no_sensitive_command_literals']
+
+
+@pytest.mark.parametrize(
+    ("path", "payload", "check_id", "cve"),
+    [
+        ("usr/local/lib/changed.dat", b"strfmon_l",
+         "glibc_strfmon_runtime_surface_absent", "CVE-2026-19499"),
+        ("app/app/dependency.dat", b"__strfmon_l",
+         "glibc_strfmon_runtime_surface_absent", "CVE-2026-19499"),
+        ("usr/local/lib/changed.dat", b"libstdc++.so.6",
+         "libstdcpp_runtime_surface_absent", "CVE-2026-95619"),
+        ("usr/local/lib/changed.dat", b"GLIBCXX_3.4.21",
+         "libstdcpp_runtime_surface_absent", "CVE-2026-95619"),
+        ("usr/local/lib/changed.dat", b"CXXABI_1.3",
+         "libstdcpp_runtime_surface_absent", "CVE-2026-95619"),
+        ("usr/share/perl/5.40/Pod/Text.pm", b"package Pod::Text;",
+         "perl_pod_text_absent", "CVE-2026-82560"),
+        ("usr/local/lib/perl5/Pod/Text.pmc", b"compiled Perl",
+         "perl_pod_text_absent", "CVE-2026-82560"),
+        ("usr/share/perl/5.40/Pod/Text/Color.pm", b"package Pod::Text::Color;",
+         "perl_pod_text_absent", "CVE-2026-82560"),
+    ],
+)
+def test_october_advisory_precondition_invalidates_claim(
+    tmp_path: Path, path: str, payload: bytes, check_id: str, cve: str,
+) -> None:
+    inspect_path, rootfs_path = _fixture_files(
+        tmp_path, extra_files={path: payload},
+    )
+    report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
+    assert report["status"] == "FAIL"
+    assert not _checks(report)[check_id]
+    assert not next(
+        c for c in report["candidateClaims"] if c["vulnerabilityId"] == cve
+    )["checksPassed"]
+
+
+def test_system_notes_are_outside_runtime_marker_scope(tmp_path: Path) -> None:
+    # Эти проверки ограничены /app и /usr/local; системные данные не сканируют.
+    inspect_path, rootfs_path = _fixture_files(tmp_path, extra_files={
+        "usr/lib/x86_64-linux-gnu/libc.so.6.notes": b"strfmon strfmon_l",
+        "usr/lib/x86_64-linux-gnu/libstdc++.so.6.notes": b"GLIBCXX_ CXXABI_",
+    })
+    report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
+    assert _checks(report)["glibc_strfmon_runtime_surface_absent"]
+    assert _checks(report)["libstdcpp_runtime_surface_absent"]
+
+
+def test_header_only_pbds_is_not_automatically_cleared(tmp_path: Path) -> None:
+    # Отсутствие динамической libstdc++ не исключает статическую копию шаблона.
+    inspect_path, rootfs_path = _fixture_files(tmp_path)
+    report = verify_image(inspect_path, rootfs_path, IMAGE_REF, DIGEST)
+    assert "CVE-2026-102010" not in {
+        c["vulnerabilityId"] for c in report["candidateClaims"]
+    }
