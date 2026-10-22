@@ -101,7 +101,7 @@ non-root user, точный Uvicorn CMD, список установленных
 symbols каждого ELF64-файла и сканирует exact rootfs: импорты устаревших
 DNS-print функций, формат `%mc` с явной шириной больше 1024 и ссылки на
 `ungetwc`/`libstdc++` в runtime-поверхности `/app` + `/usr/local`. В
-`candidateClaims` перечислены 27 CVE и поддерживающие проверки. С 2026-09-07
+`candidateClaims` перечислены 30 CVE и поддерживающие проверки (до PR #89 — 27). С 2026-09-07
 добавлены root-owned пустой `fstab`, запрет команд mount/nsenter в приложении
 и отсутствие маркеров libmount, PCRE2 DFA и zlib gzip-write API во всей
 runtime-поверхности `/app` + `/usr/local`, включая зависимости. Это статические
