@@ -158,8 +158,15 @@ GitHub CI PR #89, Gitleaks и CodeQL также прошли. Exact production i
 скачан по digest, инспектирован и экспортирован через create/export без
 исполнения контейнера. Новая локальная проверка дала PASS 29/29 и 30/30;
 итоговый JSON сохранён как `exact-evidence.json` в локальном каталоге review.
-Новый recurring run на main ещё не выполнялся: PR не слит. VEX и waiver
-не изменены; локальный PASS не превращает все 14 CVE в `not_affected`.
+PR #89 слит commit `511a6fe5e048b7998783e86719dd983ba85bdb1c`.
+[Main-scan 39783031067](https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/39783031067)
+на том же serving digest подтвердил provenance/evidence/policy PASS:
+29 checks, 30 candidate claims, 752 ELF, Critical=0, 55 advisory High,
+VEX/waiver=0. JSON evidence/policy/raw и Markdown summary artifact `12427378925`
+прочитаны; набор 14 CVE и counts по пакетам совпали с исходным scan.
+В том числе пройдены три новых candidate claims. Artifact SHA-256 по GitHub metadata:
+`d04c0305ff5815148b09c3d485ce347bc16aff7309f50ce372a7c2c7c1e6abf8`.
+VEX и waiver не изменены; PASS не превращает все 14 CVE в `not_affected`.
 
 Impact-check: затронут TB11/A66 (доказательства scanner), активы — rootfs и
 результат CVE-review; новые внешние runtime-сервисы, зависимости, права и
