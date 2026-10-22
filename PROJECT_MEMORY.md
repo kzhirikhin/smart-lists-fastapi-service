@@ -14,7 +14,7 @@
 
 Статус `DEFERRED` опубликован 2026-10-10: PR #84, commit
 `1e5d11a0f6e8039119c712d09f48dc8eca65b89f`, deploy run `38019285663`.
-Ревизия `insights-api-00067-dg6` обслуживает 100% production-трафика.
+На 2026-10-10 ревизия `insights-api-00067-dg6` обслуживала 100% production-трафика.
 Read-only scan `38019872802` подтвердил provenance OCI parent
 `sha256:93e140c246a2b3559766abd000ce4c5525bfb4cb3452ce7c2badbf94d10d0c44`
 и serving-child
@@ -95,8 +95,17 @@ GHSA-6q48-6c7w-9gw2: удалён emSign ECC Root CA - G3 с скомпроме�
 Production Dockerfile собран; в образе подтверждены версия и отсутствие root,
 строгий TLS обоих транспортов, UID 10001, отсутствие pip, health 200 и отказ
 анонимному POST /insights. Реальные вызовы Vertex AI не выполнялись.
-Исходный serving-образ всё ещё считается уязвимым до нового deploy и scan;
-55 High без исправления остаются вне этой задачи.
+Исправление опубликовано PR #86, commit `24dbe7b6924da0bfe603537bd209b7bde9dfb328`.
+Deploy `39732206290` прошёл все gates; `insights-api-00068-mdn` получает 100%
+трафика. Независимый serving scan `39732626472` подтвердил provenance/evidence
+и policy PASS: Critical=0, certifi matches=0, VEX/waiver=0; 55 advisory High
+остаются вне задачи. Parent OCI `sha256:9a8508060c8286fc7bfd676284e366f5030ed59d2b825b23e3d30575d7ccf78b`,
+serving child `sha256:b36483f57518b5b9889b97f6323186763ffe24cb869689b6e9ee9100096c4c9b`.
+Из локального production-образа с тем же certifi проверены реальные HTTPS:
+Google signing keys — 200 и непустой набор, Vertex endpoint — TLS/404 без
+credentials и вызова модели. Внешние health/insights Cloud Run дают ожидаемый
+IAM 403 без токена. Авторизованный AI-запрос после релиза ещё не подтверждён:
+браузерная автоматизация недоступна; TLS-проба не заменяет этот сценарий.
 
 ## Актуальный стек
 
