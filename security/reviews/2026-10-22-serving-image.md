@@ -10,8 +10,9 @@ SHA-256 скачанного artifact `12404959654` проверен:
 `a7d71c2c1b49de2cf090d4f7f998d34ae950488d21bf1db380e00be16586ee01`.
 
 Это review и дополнительные проверки evidence, не новое VEX-решение.
-Три новых candidate claims ещё требуют прогона на exact rootfs. Старый
-artifact их не выполнял. CVE-2026-102010 разобрана, но остаётся без
+Три новых candidate claims подтверждены локально на exact rootfs: PASS,
+29/29 checks, 30/30 candidate claims, 752 ELF. Старый artifact их не
+выполнял. CVE-2026-102010 разобрана, но остаётся без
 доказанного `not_affected`: поиск маркеров не исключает статический шаблон.
 До отдельного решения все 55 совпадений остаются advisory по A100.
 
@@ -29,9 +30,9 @@ artifact их не выполнял. CVE-2026-102010 разобрана, но о
 | CVE-2026-78410 | 9 | Review 09-07: fstab bind-source; checks PASS |
 | CVE-2026-85091 | 1 | Review 09-07: gzwrite/gzprintf; checks PASS |
 | CVE-2026-9538 | 1 | Старый VEX: отсутствующий Archive::Tar; checks PASS |
-| CVE-2026-95619 | 3 | Новый разбор ниже; candidate требует exact evidence |
-| CVE-2026-19499 | 2 | Новый разбор ниже; candidate требует exact evidence |
-| CVE-2026-82560 | 1 | Новый разбор ниже; candidate требует exact evidence |
+| CVE-2026-95619 | 3 | Новый разбор ниже; candidate checks exact rootfs PASS |
+| CVE-2026-19499 | 2 | Новый разбор ниже; candidate checks exact rootfs PASS |
+| CVE-2026-82560 | 1 | Новый разбор ниже; candidate checks exact rootfs PASS |
 | CVE-2026-102010 | 3 | Новый разбор ниже; статический PBDS не исключён |
 | **Итого** | **55** | **14 уникальных CVE** |
 
@@ -57,8 +58,8 @@ artifact их не выполнял. CVE-2026-102010 разобрана, но о
 отсутствие `libstdc++.so.6` вместе с ungetwc; новый отдельный check расширяет
 маркеры и не смешивает две причины. В сочетании с точным Uvicorn CMD,
 отсутствием запуска процессов и прямой native-загрузки это поддерживает
-кандидата `code_not_reachable`. Нужен успешный прогон новых checks на exact
-rootfs; установленная системная библиотека не объявляется исправленной.
+кандидата `code_not_reachable`. Прогон новых checks на exact rootfs дал
+PASS; установленная системная библиотека не объявляется исправленной.
 
 ### CVE-2026-19499 — glibc / strfmon
 
@@ -73,7 +74,8 @@ rootfs; установленная системная библиотека не 
 Python stdlib, native-модули и данные для dlsym. Он захватывает также
 strfmon_l и внутренние имена с этим фрагментом. Вместе с запретом процессов
 и прямой native-загрузки это кандидат `code_not_reachable`, а не утверждение,
-что glibc без дефекта. Старый artifact такой поиск не выполнял.
+что glibc без дефекта. Проверка exact rootfs дала PASS: маркеров нет.
+Старый artifact такой поиск не выполнял.
 
 ### CVE-2026-82560 — Perl / Pod::Text
 
@@ -87,8 +89,8 @@ strfmon_l и внутренние имена с этим фрагментом. �
 Проверки отсутствия полных Perl-пакетов уже прошли, но наличие одного
 perl-base не доказывает отсутствия вручную скопированного модуля. Новый check
 ищет Pod/Text.pm, Pod/Text.pmc и подклассы Pod/Text/ по всему rootfs.
-При подтверждении это кандидат `code_not_present`; старые проверки
-Archive::Tar не подменяют проверку Pod::Text.
+В exact rootfs этих путей нет, новый check PASS: это поддерживает кандидата
+`code_not_present`. Старые проверки Archive::Tar не подменяют Pod::Text.
 
 ### CVE-2026-102010 — GCC / PBDS binary heap erase_if
 
@@ -126,6 +128,15 @@ CPython/системные ELF не восстановлены из полног
 Следующий шаг для исключения: доказать отсутствие шаблона в native build
 inputs exact image либо обновить GCC-пакеты после исправления в trixie.
 
+В exact `/app` + `/usr/local` перечисленные четыре PBDS-маркера также не
+найдены. Перечень всех native ELF из site-packages содержит семь файлов:
+`_cffi_backend`, `charset_normalizer/cd`, `charset_normalizer/md`,
+`cryptography/hazmat/bindings/_rust`, `pydantic_core/_pydantic_core`,
+`websockets/speedups`, `wrapt/_wrappers`. Они относятся ровно к шести
+исследованным дистрибутивам. Это проверяет состав выбранной поверхности,
+но не восстанавливает отсутствующие после оптимизации символы и не снимает
+описанное ограничение source/wheel.
+
 ## Границы и проверка
 
 Новые маркерные checks покрывают только `/app` и `/usr/local`; системные
@@ -133,14 +144,22 @@ inputs exact image либо обновить GCC-пакеты после исп�
 встроенный код, намеренная обфускация, вычисляемые имена dlsym и RCE не
 исключаются. Отсутствие subprocess/native imports проверяется в приложении,
 не во всех исходниках зависимостей. Runtime configuration overrides,
-добавленные тома и актуальный трафик Cloud Run этим локальным review не
-проверены; digest взят из указанного completed scan.
+добавленные тома и актуальный трафик Cloud Run
+были сверены read-only через Cloud Run API 2026-10-22: ревизия
+`insights-api-00068-mdn` получает 100% трафика, указывает на указанный digest,
+command/args overrides и volume mounts/volumes отсутствуют. Это ручная
+проверка на дату, не гарантия последующего состояния платформы.
 
 Негативные тесты добавляют strfmon/libstdc++ маркеры в runtime-зависимость,
 Pod::Text/pmc/подкласс вне стандартного пути и проверяют провал связанного
 claim. Отдельно закреплено отсутствие автоматического PBDS-исключения.
-Все 297 тестов прошли в Python 3.14/Linux-контейнере без сети и credentials.
-До live exact-проверки новые claims считаются неподтверждёнными.
+Все 297 тестов прошли в Python 3.14/Linux-контейнере без сети и credentials;
+GitHub CI PR #89, Gitleaks и CodeQL также прошли. Exact production image
+скачан по digest, инспектирован и экспортирован через create/export без
+исполнения контейнера. Новая локальная проверка дала PASS 29/29 и 30/30;
+итоговый JSON сохранён как `exact-evidence.json` в локальном каталоге review.
+Новый recurring run на main ещё не выполнялся: PR не слит. VEX и waiver
+не изменены; локальный PASS не превращает все 14 CVE в `not_affected`.
 
 Impact-check: затронут TB11/A66 (доказательства scanner), активы — rootfs и
 результат CVE-review; новые внешние runtime-сервисы, зависимости, права и

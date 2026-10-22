@@ -114,8 +114,10 @@ IAM 403 без токена. Владелец 2026-10-22 подтвердил: A
 `security/reviews/2026-10-22-serving-image.md`. В scan `39732626472`
 55 совпадений относятся к 14 CVE: десять имеют прежние разборы, четыре
 дополнительно сверены с upstream. Для strfmon, libstdc++ aligned new и
-Pod::Text добавлены candidate checks; их запуск на serving rootfs ещё
-не подтверждён. PBDS erase_if — header-only: отсутствие libstdc++ не
+Pod::Text добавлены candidate checks; локально exact rootfs PASS: 29 checks,
+30 candidates, 752 ELF. Cloud Run read-only: та же ревизия/digest, 100%
+трафика, без command/volume overrides. Новый recurring main-run ещё не
+выполнен (review PR #89 не слит). PBDS erase_if — header-only: отсутствие libstdc++ не
 доказывает отсутствия статической копии; автоматический claim не добавлен.
 VEX/waiver не менялись, все 55 остаются advisory по A100. Исследование sdist
 шести native-зависимостей не нашло PBDS, но не доказывает байты wheel.
