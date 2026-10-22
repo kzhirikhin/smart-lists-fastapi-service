@@ -109,6 +109,15 @@ runtime-поверхности `/app` + `/usr/local`, включая завис�
 `checksPassed: true` означает только, что автоматические факты сошлись: он не
 создаёт VEX и не заменяет чтение advisory и review.
 
+[Разбор 2026-10-22](reviews/2026-10-22-serving-image.md) сопоставляет все
+55 текущих High match с 14 CVE. Новые candidate checks ищут strfmon и ссылки
+на libstdc++ в `/app` + `/usr/local`, а также Pod::Text по всему rootfs.
+Это 30 явно реализованных candidates, не все возможные exploit paths;
+локальный exact-прогон 2026-10-22 дал PASS: 29 checks, 30 claims. Recurring
+main-run ещё не выполнен (review PR #89 не слит). PBDS erase_if
+намеренно не получает автоматического claim: header-only код мог быть
+встроен статически даже без DT_NEEDED на libstdc++.
+
 ## Жизненный цикл исключений
 
 - VEX хранится как `security/vex/<64 hex digest>.cdx.json` и применим только к
