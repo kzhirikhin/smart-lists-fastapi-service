@@ -113,8 +113,9 @@ runtime-поверхности `/app` + `/usr/local`, включая завис�
 55 текущих High match с 14 CVE. Новые candidate checks ищут strfmon и ссылки
 на libstdc++ в `/app` + `/usr/local`, а также Pod::Text по всему rootfs.
 Это 30 явно реализованных candidates, не все возможные exploit paths;
-локальный exact-прогон 2026-10-22 дал PASS: 29 checks, 30 claims. Recurring
-main-run ещё не выполнен (review PR #89 не слит). PBDS erase_if
+локальный exact-прогон 2026-10-22 дал PASS: 29 checks, 30 claims. После merge
+PR #89 main-run `39783031067` подтвердил те же checks/claims и
+provenance/evidence/policy PASS: Critical=0, 55 advisory High, VEX/waiver=0. PBDS erase_if
 намеренно не получает автоматического claim: header-only код мог быть
 встроен статически даже без DT_NEEDED на libstdc++.
 

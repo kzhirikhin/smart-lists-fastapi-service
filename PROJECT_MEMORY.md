@@ -116,8 +116,9 @@ IAM 403 без токена. Владелец 2026-10-22 подтвердил: A
 дополнительно сверены с upstream. Для strfmon, libstdc++ aligned new и
 Pod::Text добавлены candidate checks; локально exact rootfs PASS: 29 checks,
 30 candidates, 752 ELF. Cloud Run read-only: та же ревизия/digest, 100%
-трафика, без command/volume overrides. Новый recurring main-run ещё не
-выполнен (review PR #89 не слит). PBDS erase_if — header-only: отсутствие libstdc++ не
+трафика, без command/volume overrides. PR #89 слит; main-scan `39783031067`
+подтвердил provenance/evidence/policy PASS: 29 checks/30 claims, Critical=0,
+55 advisory High, VEX/waiver=0. PBDS erase_if — header-only: отсутствие libstdc++ не
 доказывает отсутствия статической копии; автоматический claim не добавлен.
 VEX/waiver не менялись, все 55 остаются advisory по A100. Исследование sdist
 шести native-зависимостей не нашло PBDS, но не доказывает байты wheel.
