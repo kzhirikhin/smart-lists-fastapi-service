@@ -12,6 +12,7 @@ required check.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import ssl
 from pathlib import Path
@@ -741,3 +742,27 @@ class TestRecurringImageScan:
         assert "${report_prefix}-evidence.json" in workflow
         assert "provenance-${provenance_digest#sha256:}.json" in workflow
         assert "provenance-link-${child_digest#sha256:}-${parent_digest#sha256:}.json" in workflow
+
+
+@pytest.mark.parametrize("transport", ["requests", "httpx"])
+def test_certifi_bundle_rejects_compromised_emsign_root(transport: str) -> None:
+    # Проверяем реальные DER-корни установленных транспортов, а не строку версии.
+    # Fingerprint взят из удалённого emSign ECC Root CA - G3 и сверён на старом wheel.
+    compromised_root = "86a1ecba089c4a8d3bbe2734c612ba341d813e043cf9e8a862cd5c57a36bbe6b"
+    if transport == "requests":
+        from requests.certs import where
+
+        context = ssl.create_default_context(cafile=where())
+    else:
+        import httpx
+
+        context = httpx.create_ssl_context(verify=True, trust_env=False)
+
+    fingerprints = {
+        hashlib.sha256(certificate).hexdigest()
+        for certificate in context.get_ca_certs(binary_form=True)
+    }
+    assert fingerprints, "Набор доверенных CA не должен быть пустым"
+    assert compromised_root not in fingerprints
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname
