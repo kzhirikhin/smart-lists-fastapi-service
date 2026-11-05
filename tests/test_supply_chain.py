@@ -15,6 +15,8 @@ from __future__ import annotations
 import hashlib
 import re
 import ssl
+import sys
+from importlib.metadata import version as package_version
 from pathlib import Path
 
 import pytest
@@ -114,6 +116,16 @@ def _pins(filename: str) -> dict[str, str]:
 
 
 class TestPythonVersionAlignment:
+    def test_runtime_has_emudhra_distrust_patch(self) -> None:
+        # CVE-2026-115557: certifi не защищает прочие trust stores и vendored CA.
+        # Это нижняя граница официального runtime, не проверка TLS-handshake.
+        assert sys.version_info >= (3, 14, 10)
+
+    def test_pyasn1_has_decoder_dos_fixes(self) -> None:
+        # Проверяем установленный пакет: один pin в .in не доказывает состав env.
+        installed = tuple(int(part) for part in package_version("pyasn1").split("."))
+        assert installed >= (0, 6, 5)
+
     def test_runtime_tls_defaults_remain_strict(self) -> None:
         context = ssl.create_default_context()
         assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
@@ -123,20 +135,21 @@ class TestPythonVersionAlignment:
     def test_runtime_builder_and_workflows_use_the_same_python(self) -> None:
         dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
         versions = re.findall(
-            r"^FROM python:(3\.\d+)-slim(?: AS builder)?$",
+            r"^FROM python:(3\.\d+\.\d+)-slim(?: AS builder)?$",
             dockerfile,
             re.MULTILINE,
         )
         assert len(versions) == 2
         assert versions[0] == versions[1]
         version = versions[0]
+        major_minor = ".".join(version.split(".")[:2])
 
         for name in ("ci.yml", "deploy.yml", "image-scan.yml"):
             workflow = (WORKFLOWS_DIR / name).read_text(encoding="utf-8")
-            assert re.findall(r"python-version: '(3\.\d+)'", workflow) == [version]
+            assert re.findall(r"python-version: '(3\.\d+\.\d+)'", workflow) == [version]
 
-        assert f"/usr/local/lib/python{version}/site-packages/pip" in dockerfile
-        assert f"/usr/local/bin/pip{version}" in dockerfile
+        assert f"/usr/local/lib/python{major_minor}/site-packages/pip" in dockerfile
+        assert f"/usr/local/bin/pip{major_minor}" in dockerfile
 
 
 class TestActionPins:
@@ -732,7 +745,7 @@ class TestRecurringImageScan:
     def test_policy_is_loaded_from_reviewed_main_checkout(self, workflow: str) -> None:
         assert "actions/checkout@" in workflow
         assert "persist-credentials: false" in workflow
-        assert "python-version: '3.14'" in workflow
+        assert "python-version: '3.14.10'" in workflow
 
     def test_reports_survive_a_failed_gate(self, workflow: str) -> None:
         assert "if: always()" in workflow
