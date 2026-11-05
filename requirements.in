@@ -3,15 +3,15 @@
 # Команда пересборки — в AGENTS.md, раздел «Зависимости».
 # Защитное закрепление: GHSA-6q48-6c7w-9gw2, скомпрометированный emSign root.
 # Прямое ограничение транзитивной зависимости сохраняет исправление при compile.
-certifi==2026.10.19
+certifi==2026.10.23
 # Четыре DoS в ASN.1 decoder (CVE-2026-119194..119197); приходит через google-auth.
 pyasn1==0.6.5
-fastapi==0.142.2
+fastapi==0.162.0
 # Новая обязательная API-зависимость FastAPI; свежий 1.45.1 пока не выдержан.
-opentelemetry-api==1.45.0
-google-genai==2.25.0
-google-auth==2.58.1
-pydantic-settings==2.15.0
+opentelemetry-api==1.45.1
+google-genai==2.33.0
+google-auth==2.62.0
+pydantic-settings==2.16.2
 requests==2.34.2
 slowapi==0.1.10
 uvicorn==0.54.0
