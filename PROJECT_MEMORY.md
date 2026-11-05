@@ -8,7 +8,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-11-05 (Python TLS и pyasn1 DoS; локальное исправление)
+**Последнее обновление:** 2026-11-05 (выкладка Python TLS и pyasn1 DoS исправлений)
 
 **Состояние:** активная разработка
 
@@ -116,15 +116,28 @@ Python 3.14.9 / CVE-2026-115557 (Critical) и четыре High pyasn1 0.6.4
 provenance, runtime evidence и Grype исполнились успешно. Подробности и
 границы применимости — `security/reviews/2026-11-05-image-scan.md`.
 
-Локально Python 3.14.10 закреплён в обеих стадиях Dockerfile и трёх workflow,
+Python 3.14.10 закреплён в обеих стадиях Dockerfile и трёх workflow,
 pyasn1 0.6.5 — в requirements.in; оба lock пересобраны pip-compile с хешами,
 остальные версии сохранены. Patch runtime обновляется явно; еженедельный
 scanner продолжает проверять фактически обслуживающий образ. Тесты проверяют
 минимальные установленные security-версии и равенство полных Python pins;
 это не handshake-тест отзыва промежуточных CA. 299 тестов без сети, pip check,
 production build и smoke health/auth/TLS прошли. Свежий локальный Grype: PASS,
-Critical=0, блокирующих High=0, advisory High=60, VEX/waiver=0. Production пока не обновлён;
-для закрытия находок нужны deploy и независимый serving scan нового digest.
+Critical=0, блокирующих High=0, advisory High=60, VEX/waiver=0.
+
+Исправление опубликовано [FastAPI PR #96](https://github.com/kzhirikhin/smart-lists-fastapi-service/pull/96),
+commit `d8140c23dbd4a2f627b4ff7e603c8a5ce9769541`.
+[Deploy 41958660134](https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/41958660134)
+прошёл test, provenance, attestation, SBOM и pre-deploy Grype; ревизия
+`insights-api-00069-5fl` получает 100% трафика по результату deploy.
+[Serving scan 41959094732](https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/41959094732)
+подтвердил provenance/evidence и policy PASS: Critical=0, блокирующих High=0,
+advisory High=60, VEX/waiver=0. Parent OCI
+`sha256:b2c70a6841c62706164434f218c5e2a8db624991e36b7cc090f47a74e4e24ced`,
+serving child
+`sha256:5839780ab8f1207495c4511400c3b5fc0a4c2010bbc75d529d0daa2f82c06e8a`.
+Внешние health/insights без токена дают ожидаемый IAM 403. Ручная проверка
+реального AI-инсайта через production UI пока не выполнена в этой задаче.
 
 ## Актуальный стек
 
