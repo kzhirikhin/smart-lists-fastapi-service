@@ -59,9 +59,27 @@ PyPI wheel 0.6.5 опубликован 2026-10-27; SHA-256
 - Отрицательная проба настоящим wheel pyasn1 0.6.4 в отдельном target приводит
   к ожидаемому падению нового теста. Python guard отвергает синтетический
   sys.version_info 3.14.9; старый Python runtime этой пробой не запускался.
-- Production не менялся; старый BLOCKED не закрыт локальной сборкой. После deploy нужен read-only
-  serving scan с provenance/evidence и свежей базой, затем ручной AI smoke.
 
 IAM, OIDC/WIF, API-контракт, payload/prompt, лимиты, VEX/waivers и gate не меняются.
 Новых сервисов, секретов и границ доверия нет. Остаток A100 (неисправимые High
 не блокируют) сохраняется; прежние exact VEX не переносятся на новый digest.
+
+## Production-подтверждение 2026-11-05
+
+Исправление опубликовано [FastAPI PR #96](https://github.com/kzhirikhin/smart-lists-fastapi-service/pull/96),
+commit `d8140c23dbd4a2f627b4ff7e603c8a5ce9769541`.
+[Deploy 41958660134](https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/41958660134)
+прошёл test, provenance, attestation, SBOM и pre-deploy Grype; ревизия
+`insights-api-00069-5fl` получает 100% трафика по результату deploy.
+[Serving scan 41959094732](https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/41959094732)
+подтвердил provenance/evidence и policy PASS: Critical=0, блокирующих High=0,
+advisory High=60, VEX/waiver=0. Parent OCI
+`sha256:b2c70a6841c62706164434f218c5e2a8db624991e36b7cc090f47a74e4e24ced`,
+serving child
+`sha256:5839780ab8f1207495c4511400c3b5fc0a4c2010bbc75d529d0daa2f82c06e8a`.
+Внешние health/insights без токена дают ожидаемый IAM 403. Ручная проверка
+реального AI-инсайта через production UI пока не выполнена в этой задаче.
+
+Автоматический scan `41958660203` стартовал одновременно с deploy и проверил
+старый `b36483f…96c4c9b`: ожидаемый BLOCKED до переключения трафика.
+Приёмка новой ревизии относится к последующему ручному run `41959094732`.
