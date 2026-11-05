@@ -1,6 +1,7 @@
 # Сборочная стадия. Здесь работает pip и остаётся всё, что он тянет за собой;
 # в runtime-образ из этой стадии переезжают только сами пакеты.
-FROM python:3.14-slim AS builder
+# Patch закреплён из-за CVE-2026-115557; CI использует ту же версию.
+FROM python:3.14.10-slim AS builder
 
 COPY requirements.txt /tmp/requirements.txt
 
@@ -20,7 +21,7 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --require-hashes --only-binary=:all: \
     --prefix=/install -r /tmp/requirements.txt
 
-FROM python:3.14-slim
+FROM python:3.14.10-slim
 
 # Официальный образ пересобирается реже, чем Debian выпускает обновления
 # безопасности: на 2026-08-20 в тогдашнем python:3.13-slim не хватало util-linux
