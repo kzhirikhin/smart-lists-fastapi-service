@@ -129,7 +129,8 @@ Example request:
     {
       "name": "Book a hotel",
       "is_completed": false,
-      "note": "Late check-in is required"
+      "note": "Late check-in is required",
+      "status_text": "Waiting for the hotel to reply"
     },
     {
       "name": "Buy a rail pass",
@@ -174,6 +175,11 @@ Common error responses:
 | `500` | The service could not produce a valid text result |
 | `502` | Vertex AI returned an API error |
 
+Optional `status_text` describes the current situation of an item or sub-item,
+independently of its work status. It is validated as one line of up to 120
+characters, trimmed, and omitted from the prompt when empty. It remains
+untrusted data inside the escaped JSON block. Older callers can omit it.
+
 ## Request limits
 
 | Input | Limit |
@@ -187,6 +193,7 @@ Common error responses:
 | Group name | 1–100 characters |
 | User message | Up to 500 characters |
 | Response language | `ru`, `vi`, `en`, or `ja`; defaults to `en` for older callers |
+| Current state description | Up to 120 characters per entry, at most 18,000 across 50 items and 100 sub-items; the 100,000-byte body cap still applies |
 | List note | Up to 4,000 characters |
 | Note on one item | Up to 4,000 characters |
 | Note on one sub-item | Up to 4,000 characters |

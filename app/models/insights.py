@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Annotated, Literal, Optional
 
 
+MAX_ITEM_STATE_LENGTH = 120
 MAX_NOTE_LENGTH = 4_000
 MAX_ITEM_NOTES = 10
 MAX_ITEM_NOTES_CHARS = 8_000
@@ -25,6 +26,7 @@ class SubItem(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     is_completed: bool
     status: ItemStatus | None = None
+    status_text: str | None = Field(default=None, max_length=MAX_ITEM_STATE_LENGTH, strict=True)
     note: Optional[str] = Field(default=None, max_length=MAX_NOTE_LENGTH)
 
     @model_validator(mode="after")
@@ -35,6 +37,17 @@ class SubItem(BaseModel):
         elif (self.status == "COMPLETED") != self.is_completed:
             raise ValueError("status and is_completed must agree")
         return self
+
+    @field_validator("status_text", mode="before")
+    @classmethod
+    def strip_status_text(cls, value: object) -> object:
+        """Подпись — одна строка; пустая совместима со старым клиентом."""
+        if isinstance(value, str):
+            value = value.strip()
+            if "\r" in value or "\n" in value:
+                raise ValueError("status_text must be a single line")
+            return value or None
+        return value
 
     @field_validator("note", mode="before")
     @classmethod
