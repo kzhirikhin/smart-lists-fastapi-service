@@ -1,0 +1,76 @@
+{
+  "$schema": "https://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:d7493d75-2996-4b01-9932-205d77d23da3",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-11-12T09:01:20Z",
+    "component": {
+      "bom-ref": "pkg:oci/insights-api@sha256:7faf8be3bd0a07dc0123d1bbfd58586d7fe909b3ebaca8f6f09d1a689c581d7c",
+      "type": "container",
+      "name": "insights-api",
+      "version": "sha256:7faf8be3bd0a07dc0123d1bbfd58586d7fe909b3ebaca8f6f09d1a689c581d7c"
+    },
+    "properties": [
+      {
+        "name": "smart-lists:vex:reviewed-by",
+        "value": "@kzhirikhin"
+      },
+      {
+        "name": "smart-lists:vex:reviewed-at",
+        "value": "2026-11-12T09:01:20Z"
+      },
+      {
+        "name": "smart-lists:vex:approval",
+        "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/pull/107"
+      }
+    ]
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:generic/python@3.14.10",
+      "type": "library",
+      "name": "python",
+      "version": "3.14.10",
+      "purl": "pkg:generic/python@3.14.10"
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-119170",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "requires_configuration",
+        "detail": "PSF ограничивает эту регрессию Python 3.14.10 режимом OpenSSL FIPS. Exact подписанный linux/amd64 child проверен job 43185846747: _hashlib.get_fips_mode()=0, fips.so=0; у serving revisions и service template нет выбранных FIPS/OpenSSL/LD/PYTHONPATH/PYTHONHOME env, volumes и command overrides. Необходимая конфигурация отсутствует. Review выполнен Codex по явному поручению владельца @kzhirikhin. Manual promotion повторяет подпись, пакет/FIPS, runtime и fresh full scan; recurring runtime guard запрещает применение этого exact VEX при selected runtime drift. Это не память live-процесса и не все возможные поздние provider loads. Новый digest, включение FIPS/overrides, новый exploit path или официальный patch требуют пересмотра; другие образы и CVE не покрыты."
+      },
+      "affects": [
+        {
+          "ref": "pkg:generic/python@3.14.10"
+        }
+      ],
+      "properties": [
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://mail.python.org/archives/list/security-announce@python.org/message/PXVTTOBPUMFJSSUXN6XCS7FC5DZOSZXK/"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/43185846747"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/f9a5580af89812c30c98dd58d55db419aa67490a/scripts/probe_otel_candidate.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/blob/374b55cf76c5d3df0d84c0b2ede786f60ba88fb5/scripts/fips_vex_guard.py"
+        },
+        {
+          "name": "smart-lists:vex:evidence",
+          "value": "https://github.com/kzhirikhin/smart-lists-fastapi-service/pull/107"
+        }
+      ]
+    }
+  ]
+}

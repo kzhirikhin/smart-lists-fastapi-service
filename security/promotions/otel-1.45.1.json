@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "parentDigest": "sha256:73784498e77809ea195a4f68753d93064f14fe9a3fbb6cb2933a9994fc087bba",
+  "imageDigest": "sha256:7faf8be3bd0a07dc0123d1bbfd58586d7fe909b3ebaca8f6f09d1a689c581d7c",
+  "sourceSha": "5b6eb992beaa0d2c404bd5b687b900f29a4974e5",
+  "baselineDigest": "sha256:534fcd9b6d813f37a9307e1706302d79d1215abbb6a449a59c74da27d802e870",
+  "reviewedAt": "2026-11-12T09:01:20Z",
+  "expiresAt": "2026-11-19T09:01:20Z",
+  "approval": "https://github.com/kzhirikhin/smart-lists-fastapi-service/pull/107"
+}
