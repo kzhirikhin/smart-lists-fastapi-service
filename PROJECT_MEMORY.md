@@ -129,7 +129,9 @@ parent/source/child, main + production Environment, существующая dep
 подпись/FIPS, SBOM attachment, fresh full scan, ровно один CVE-2026-119170 VEX,
 нулевые waiver/блокирующие High/Critical и runtime непосредственно перед deploy.
 Затем проверяет фактические serving digests. Обычный push-deploy gate не меняется.
-Ручной путь пока не запущен: отдельного record/VEX ещё нет.
+Механизм опубликован PR #106/main@374b55c. Отдельный PR #107 подготавливает
+один exact FIPS VEX и promotion record с review window <=7 дней; waiver нет.
+Ручной promotion ещё не запущен, production пока на прежнем child.
 
 Recurring scan перед применением exact FIPS VEX проверяет выбранные Cloud Run
 runtime overrides для того же child и service template без исполнения image.
