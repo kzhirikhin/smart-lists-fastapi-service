@@ -11,6 +11,10 @@ on:
         description: Проверить FIPS в изолированной копии serving-образа (не меняет policy)
         type: boolean
         default: false
+      probe_candidate:
+        description: Проверить подписанный OpenTelemetry candidate из deploy 43181145499
+        type: boolean
+        default: false
   # После merge policy-only PR проверяем тот же production digest автоматически.
   # Эти пути исключены из deploy.yml, поэтому exact-привязка не устаревает.
   push:
@@ -388,12 +392,13 @@ jobs:
 
   # Ручная диагностика отделена от штатного offline evidence и не меняет policy.
   fips_probe:
-    if: github.event_name == 'workflow_dispatch' && inputs.probe_fips
+    if: github.event_name == 'workflow_dispatch' && (inputs.probe_fips || inputs.probe_candidate)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       id-token: write
+      attestations: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -411,9 +416,28 @@ jobs:
           python scripts/probe_serving_fips.py --output "${RUNNER_TEMP}/fips-probe.json"
           echo '### FIPS diagnostic (no policy exception)' >> "${GITHUB_STEP_SUMMARY}"
           cat "${RUNNER_TEMP}/fips-probe.json" >> "${GITHUB_STEP_SUMMARY}"
+      - name: Install pinned attestation verifier for candidate
+        if: inputs.probe_candidate
+        run: |
+          archive="${RUNNER_TEMP}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz" -o "${archive}"
+          echo "${GH_CLI_SHA256}  ${archive}" | sha256sum -c -
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}"
+          sudo install "${RUNNER_TEMP}/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh
+      - name: Verify signed OpenTelemetry candidate and FIPS conditions
+        if: inputs.probe_candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m scripts.probe_otel_candidate --output "${RUNNER_TEMP}/fips-candidate.json" --verification-output "${RUNNER_TEMP}/fips-candidate-verification.json"
+          echo '### Signed candidate diagnostic (no policy exception)' >> "${GITHUB_STEP_SUMMARY}"
+          cat "${RUNNER_TEMP}/fips-candidate.json" >> "${GITHUB_STEP_SUMMARY}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fips-probe-${{ github.run_id }}
-          path: ${{ runner.temp }}/fips-probe.json
+          path: |
+            ${{ runner.temp }}/fips-probe.json
+            ${{ runner.temp }}/fips-candidate.json
+            ${{ runner.temp }}/fips-candidate-verification.json
           retention-days: 30
           if-no-files-found: error
