@@ -106,7 +106,7 @@ CVE не найдено в проверенной копии/настройка�
 прошли на Python 3.14.10/Linux. Старый wheel 1.45.0 ожидаемо роняет новые
 проверки установленной версии и отказа oversized-заголовка до парсера.
 
-## Проверка candidate OpenTelemetry (2026-11-12, подготовлено)
+## Проверка candidate OpenTelemetry (2026-11-12)
 
 Владелец разрешил проверку candidate и точечный допуск FIPS-CVE с rollout.
 Диагностика image-scan получает opt-in probe_candidate: фиксированный OCI parent
@@ -116,7 +116,26 @@ repository ID и hosted runner; из OCI index выбирается один exa
 В изолированной копии обязательны OpenTelemetry API 1.45.1, Python 3.14.10,
 FIPS=0/fips.so=0. Проверяются выбранные overrides всех serving revisions
 и текущего service template; при дрейфе требуется отдельный review.
-Факт проверки candidate ещё не получен; VEX/policy пока без изменений.
+PR #105/main@f9a5580 опубликован. fips_probe job 43185846747 подтвердила
+подпись и claims, child 7faf8be3…9c581d7c, OpenTelemetry 1.45.1,
+FIPS=0/fips.so=0 и отсутствие выбранных overrides serving/service template.
+Это не память live-процесса; VEX ещё не применяется.
+
+Подготовлен отдельный manual-only promote-reviewed-otel.yml: один подписанный
+parent/source/child, main + production Environment, существующая deployer identity,
+полный test job, checksum-pinned GH/Grype и свежая DB. Promotion не пересобирает
+образ: требует отдельный reviewed record/VEX для этого child, окно не более семи
+дней и прежний serving baseline (или уже тот же child). Повторно проверяет
+подпись/FIPS, SBOM attachment, fresh full scan, ровно один CVE-2026-119170 VEX,
+нулевые waiver/блокирующие High/Critical и runtime непосредственно перед deploy.
+Затем проверяет фактические serving digests. Обычный push-deploy gate не меняется.
+Ручной путь пока не запущен: отдельного record/VEX ещё нет.
+
+Recurring scan перед применением exact FIPS VEX проверяет выбранные Cloud Run
+runtime overrides для того же child и service template без исполнения image.
+Любой drift/ошибка снова блокирует scan. Это не полный перечень всех механизмов
+активации providers и не атомарность относительно внешнего control-plane изменения;
+main-only WIF, Docker sandbox и доверие runner сохраняются.
 
 ## Назначение
 
