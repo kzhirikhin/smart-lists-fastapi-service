@@ -383,7 +383,7 @@ jobs:
       # не подменяет историю SBOM.
       - name: Upload image scan reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: grype-serving-image-reports-${{ github.run_id }}
           path: ${{ runner.temp }}/grype-reports/
@@ -432,7 +432,7 @@ jobs:
           python -m scripts.probe_otel_candidate --output "${RUNNER_TEMP}/fips-candidate.json" --verification-output "${RUNNER_TEMP}/fips-candidate-verification.json"
           echo '### Signed candidate diagnostic (no policy exception)' >> "${GITHUB_STEP_SUMMARY}"
           cat "${RUNNER_TEMP}/fips-candidate.json" >> "${GITHUB_STEP_SUMMARY}"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fips-probe-${{ github.run_id }}
           path: |
