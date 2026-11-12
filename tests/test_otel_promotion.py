@@ -145,3 +145,16 @@ def test_review_expiring_during_scan_cannot_reach_deploy(execution, monkeypatch)
 def test_candidate_report_drift_blocks(field, value):
     with pytest.raises(ValueError):
         promotion.validate_report({**report(), field: value}, record())
+
+
+def test_plain_run_scalars_do_not_contain_yaml_mapping_delimiter():
+    # Узкий regression guard известной формы, не общий YAML parser.
+    # В plain scalar shell quotes не экранируют YAML-разделитель ": ".
+    for path in sorted((promotion.ROOT / '.github/workflows').glob('*.yml')):
+        for line in path.read_text().splitlines():
+            stripped = line.strip()
+            if not stripped.startswith('run: '):
+                continue
+            scalar = stripped.removeprefix('run: ').strip()
+            if scalar and scalar[0] not in ('|', '>', chr(34), chr(39)):
+                assert ': ' not in scalar, str(path)
