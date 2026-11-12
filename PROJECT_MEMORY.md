@@ -70,7 +70,7 @@ serving child:
 Это датированные результаты защищённых jobs, не гарантия последующего rollout.
 Реальный ответ Vertex AI с новым полем ожидает проверки через web UI.
 
-## Security-обновление OpenTelemetry API (2026-11-12, локально)
+## Security-обновление OpenTelemetry API (2026-11-12, rollout заблокирован)
 
 `opentelemetry-api` обновлён с 1.45.0 до 1.45.1 в исходном `.in` и обоих
 пересобранных Linux hash-lock; остальные версии сохранены. Исправляется
@@ -78,7 +78,22 @@ CVE-2026-114603 / GHSA-xcq7-p3pf-p88h, DoS при разборе недовер�
 Пять отключённых telemetry-флагов сохранены. TestOpenTelemetrySecurity проверяет
 установленную версию, все три pins и отбрасывание синтаксически корректного
 заголовка длиннее 8192 символов; валидный короткий заголовок сохраняется.
-Это локальное исправление: production ещё не обновлён.
+PR #102 слит в main@5b6eb992. CI/CodeQL/dependency-review прошли, но deploy
+43181145499 остановлен до Cloud Run: Grype нашёл High CVE-2026-119170
+в Python 3.14.10 (FIPS/hashlib). Указанный fixed-in 3.14.11 ещё не опубликован:
+проверены официальный CPython tag и Docker manifest 2026-11-12. Production
+не обновлён, policy/VEX не менялись. Применимость требует отдельной проверки.
+
+Владелец явно разрешил отдельную ручную FIPS-диагностику 2026-11-12.
+`image-scan.yml` получает необязательный `probe_fips=false`: дополнительная job
+использует ту же read-only scanner identity, не получает production Environment,
+не меняет сервис или policy. Скрипт берёт traffic/tagged revisions из Cloud Run,
+проверяет exact image prefix/digest и запускает только cold Python в копии образа
+без сети, mounts/env, с read-only rootfs, UID 10001, cap-drop и лимитами.
+Artifact содержит режим FIPS/версию OpenSSL и только имена релевантных runtime env,
+признаки mounts/command overrides. Это не состояние памяти serving-процесса,
+не доказательство всех поздних загрузок OpenSSL и не основание автоматического VEX.
+Штатный offline evidence контейнер не запускает; runtime diagnostic отделён.
 331 pytest без сети, pip check, production Docker build и runtime health=200
 прошли на Python 3.14.10/Linux. Старый wheel 1.45.0 ожидаемо роняет новые
 проверки установленной версии и отказа oversized-заголовка до парсера.
