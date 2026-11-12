@@ -64,6 +64,34 @@ Guard не является общей политикой всех возмож�
 новом digest, новых сведениях advisory или официальном patch это решение
 пересматривается. Следующий image не наследует VEX автоматически.
 
-VEX и promotion record принимаются отдельным review-PR. До его принятия
-и успешного ручного gate production не изменяется. Фактический rollout/serving
-scan должны быть записаны после выполнения; заранее успех не утверждается.
+VEX и promotion record приняты отдельным PR #107 после проверки evidence.
+Результат выполнения и границы записаны ниже.
+
+## Успешный promotion и независимая проверка (2026-11-12)
+
+Отдельный exact VEX/record принят PR #107/main@d9a79e3; механизм — PR #106,
+YAML-команда install исправлена PR #108. Record promotion действует до
+2026-11-19T09:01:20Z; это окно выполнения promotion, не blanket срок VEX.
+
+[Manual promotion 43188890883](https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/43188890883)
+успешно повторил tests, подпись/source/claims, linked child, FIPS/пакеты,
+SBOM attachment, fresh full Grype и selected runtime guards. Cloud Run
+обслуживает insights-api-00071-2kt с exact child
+`sha256:7faf8be3bd0a07dc0123d1bbfd58586d7fe909b3ebaca8f6f09d1a689c581d7c`.
+Parent остался `sha256:73784498e77809ea195a4f68753d93064f14fe9a3fbb6cb2933a9994fc087bba`,
+source — `5b6eb992beaa0d2c404bd5b687b900f29a4974e5`.
+
+[Независимый serving scan 43189371657](https://github.com/kzhirikhin/smart-lists-fastapi-service/actions/runs/43189371657)
+подтвердил provenance/evidence, exact FIPS runtime guard и policy PASS:
+raw Critical=0/High=60, VEX=1, waiver=0, блокирующих Critical=0/High=0,
+advisory High=59. FIPS-проба нового serving child: Python 3.14.10,
+OpenSSL 3.5.7, FIPS=0/fips.so=0; selected runtime overrides отсутствуют.
+
+Пакет OpenTelemetry API 1.45.1 подтверждён candidate-пробой того же immutable
+child. Неприменимость Python FIPS CVE условна и относится только к exact
+image/package/configuration; новый image не наследует VEX. Включение FIPS,
+selected runtime drift, новые сведения advisory или официальный patch требуют
+пересмотра. Обычный push-deploy gate не ослаблялся, другие CVE не исключались.
+420 pytest без сети/pip check прошли; в web — lint/typecheck, 843 unit и
+589 static-security проверок. Реальный AI-ответ через production UI после
+этой выкладки не проверялся; это остаётся отдельной ручной проверкой владельца.
