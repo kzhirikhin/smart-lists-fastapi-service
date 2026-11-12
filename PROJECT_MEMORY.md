@@ -106,6 +106,18 @@ CVE не найдено в проверенной копии/настройка�
 прошли на Python 3.14.10/Linux. Старый wheel 1.45.0 ожидаемо роняет новые
 проверки установленной версии и отказа oversized-заголовка до парсера.
 
+## Проверка candidate OpenTelemetry (2026-11-12, подготовлено)
+
+Владелец разрешил проверку candidate и точечный допуск FIPS-CVE с rollout.
+Диагностика image-scan получает opt-in probe_candidate: фиксированный OCI parent
+73784498…c087bba из deploy 43181145499, source 5b6eb992. До Docker pull/run
+повторно проверяются keyless подпись, signer/source SHA, main, production/push,
+repository ID и hosted runner; из OCI index выбирается один exact linux/amd64 child.
+В изолированной копии обязательны OpenTelemetry API 1.45.1, Python 3.14.10,
+FIPS=0/fips.so=0. Проверяются выбранные overrides всех serving revisions
+и текущего service template; при дрейфе требуется отдельный review.
+Факт проверки candidate ещё не получен; VEX/policy пока без изменений.
+
 ## Назначение
 
 Smart Lists AI Service — отдельный FastAPI-сервис для AI-инсайтов
