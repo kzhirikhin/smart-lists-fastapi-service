@@ -8,7 +8,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-11-12 (rollout заблокирован; serving FIPS проверен)
+**Последнее обновление:** 2026-11-12 (OpenTelemetry 1.45.1 выложен; exact FIPS VEX проверен)
 
 **Состояние:** активная разработка
 
@@ -70,74 +70,41 @@ serving child:
 Это датированные результаты защищённых jobs, не гарантия последующего rollout.
 Реальный ответ Vertex AI с новым полем ожидает проверки через web UI.
 
-## Security-обновление OpenTelemetry API (2026-11-12, rollout заблокирован)
+## OpenTelemetry 1.45.1 и exact FIPS VEX (2026-11-12, опубликовано)
 
-`opentelemetry-api` обновлён с 1.45.0 до 1.45.1 в исходном `.in` и обоих
-пересобранных Linux hash-lock; остальные версии сохранены. Исправляется
-CVE-2026-114603 / GHSA-xcq7-p3pf-p88h, DoS при разборе недоверенного tracestate.
-Пять отключённых telemetry-флагов сохранены. TestOpenTelemetrySecurity проверяет
-установленную версию, все три pins и отбрасывание синтаксически корректного
-заголовка длиннее 8192 символов; валидный короткий заголовок сохраняется.
-PR #102 слит в main@5b6eb992. CI/CodeQL/dependency-review прошли, но deploy
-43181145499 остановлен до Cloud Run: Grype нашёл High CVE-2026-119170
-в Python 3.14.10 (FIPS/hashlib). Указанный fixed-in 3.14.11 ещё не опубликован:
-проверены официальный CPython tag и Docker manifest 2026-11-12. Production
-не обновлён, policy/VEX не менялись. Применимость требует отдельной проверки.
+PR #102/source 5b6eb992 закрепил opentelemetry-api 1.45.1 против CVE-2026-114603;
+оба Linux hash-lock пересобраны, остальные версии сохранены. Пять telemetry
+flags остаются выключенными. TestOpenTelemetrySecurity проверяет pins/env и
+отказ oversized tracestate до парсера; старый 1.45.0 ожидаемо роняет regression.
 
-Владелец явно разрешил отдельную ручную FIPS-диагностику 2026-11-12.
-`image-scan.yml` получает необязательный `probe_fips=false`: дополнительная job
-использует ту же read-only scanner identity, не получает production Environment,
-не меняет сервис или policy. Скрипт берёт traffic/tagged revisions из Cloud Run,
-проверяет exact image prefix/digest и запускает только cold Python в копии образа
-без сети, mounts/env, с read-only rootfs, UID 10001, cap-drop и лимитами.
-Artifact содержит режим FIPS/версию OpenSSL и только имена релевантных runtime env,
-признаки mounts/command overrides. Это не состояние памяти serving-процесса,
-не доказательство всех поздних загрузок OpenSSL и не основание автоматического VEX.
-Штатный offline evidence контейнер не запускает; runtime diagnostic отделён.
-Диагностика опубликована PR #103/main@d1fb01c; CI/CodeQL/dependency review прошли.
-В fips_probe job 43183151100 serving insights-api-00070-q8b, exact child
-534fcd9b…d802e870, показал Python 3.14.10, OpenSSL 3.5.7, FIPS=0 и 0 fips.so;
-релевантных runtime env, volumes и command overrides нет. Условие применимости
-CVE не найдено в проверенной копии/настройках; это не память live-процесса
-и не следующий candidate digest. Policy остаётся FAIL; VEX/waiver не добавлялись.
-353 pytest без сети и pip check прошли. Подробности и границы:
-`security/reviews/2026-11-12-fips-probe.md`.
-331 pytest без сети, pip check, production Docker build и runtime health=200
-прошли на Python 3.14.10/Linux. Старый wheel 1.45.0 ожидаемо роняет новые
-проверки установленной версии и отказа oversized-заголовка до парсера.
+Обычный deploy остановился на Python 3.14.10/CVE-2026-119170 (только OpenSSL
+FIPS); официальный patch 3.14.11 на дату review не опубликован. После явного
+разрешения владельца signed candidate повторно проверен job 43185846747:
+parent 73784498…c087bba, child 7faf8be3…9c581d7c, source 5b6eb992,
+OpenTelemetry 1.45.1, FIPS=0/fips.so=0, selected serving/template overrides нет.
+PR #107 принял один exact CycloneDX not_affected/requires_configuration для
+этого child/python 3.14.10/CVE; waiver нет, новый image не наследует VEX.
 
-## Проверка candidate OpenTelemetry (2026-11-12)
+Ручной promote-reviewed-otel.yml (PR #106/#108): main + production Environment,
+needs:test, существующая deployer identity, fixed parent/source/child/baseline,
+review record <=7 дней с совпадающими VEX metadata. Повторяет подпись/claims,
+FIPS/пакеты, SBOM, fresh full scan, selected runtime/time guards; разрешает
+ровно этот VEX, ноль waiver/иных блокеров, затем сверяет serving digest.
+Обычный push-deploy gate не меняется. Record expires 2026-11-19T09:01:20Z.
 
-Владелец разрешил проверку candidate и точечный допуск FIPS-CVE с rollout.
-Диагностика image-scan получает opt-in probe_candidate: фиксированный OCI parent
-73784498…c087bba из deploy 43181145499, source 5b6eb992. До Docker pull/run
-повторно проверяются keyless подпись, signer/source SHA, main, production/push,
-repository ID и hosted runner; из OCI index выбирается один exact linux/amd64 child.
-В изолированной копии обязательны OpenTelemetry API 1.45.1, Python 3.14.10,
-FIPS=0/fips.so=0. Проверяются выбранные overrides всех serving revisions
-и текущего service template; при дрейфе требуется отдельный review.
-PR #105/main@f9a5580 опубликован. fips_probe job 43185846747 подтвердила
-подпись и claims, child 7faf8be3…9c581d7c, OpenTelemetry 1.45.1,
-FIPS=0/fips.so=0 и отсутствие выбранных overrides serving/service template.
-Это не память live-процесса; VEX ещё не применяется.
+Promotion 43188890883 прошёл; serving — insights-api-00071-2kt, child
+7faf8be3…9c581d7c. Независимый scan 43189371657 подтвердил provenance/evidence,
+runtime guard и policy PASS: Critical=0, блокирующих High=0, advisory High=59,
+VEX=1, waiver=0. Recurring scan перед exact FIPS VEX проверяет выбранные
+Cloud Run overrides/template; drift/ошибка снова блокируют, image не исполняется.
+Opt-in probe_fips/probe_candidate исполняют cold Python только в sandbox без
+host env/credentials/mounts/network; это не live-память и не все provider paths.
+Внешний control-plane TOCTOU вне GitHub concurrency остаётся ограничением.
 
-Подготовлен отдельный manual-only promote-reviewed-otel.yml: один подписанный
-parent/source/child, main + production Environment, существующая deployer identity,
-полный test job, checksum-pinned GH/Grype и свежая DB. Promotion не пересобирает
-образ: требует отдельный reviewed record/VEX для этого child, окно не более семи
-дней и прежний serving baseline (или уже тот же child). Повторно проверяет
-подпись/FIPS, SBOM attachment, fresh full scan, ровно один CVE-2026-119170 VEX,
-нулевые waiver/блокирующие High/Critical и runtime непосредственно перед deploy.
-Затем проверяет фактические serving digests. Обычный push-deploy gate не меняется.
-Механизм опубликован PR #106/main@374b55c. Отдельный PR #107 подготавливает
-один exact FIPS VEX и promotion record с review window <=7 дней; waiver нет.
-Ручной promotion ещё не запущен, production пока на прежнем child.
-
-Recurring scan перед применением exact FIPS VEX проверяет выбранные Cloud Run
-runtime overrides для того же child и service template без исполнения image.
-Любой drift/ошибка снова блокирует scan. Это не полный перечень всех механизмов
-активации providers и не атомарность относительно внешнего control-plane изменения;
-main-only WIF, Docker sandbox и доверие runner сохраняются.
+420 pytest без сети/pip check и все четыре workflow через YAML parser прошли;
+plain run scalar guard — узкий regression, не общий Actions validator.
+Факты/источники: security/reviews/2026-11-12-otel-candidate.md и
+2026-11-12-fips-probe.md. Настоящий production AI-ответ после rollout не проверен.
 
 ## Назначение
 
@@ -547,12 +514,13 @@ Runtime identity имеет только custom role с `aiplatform.endpoints.pr
   2026-08-29 проверил рабочий digest `sha256:990201…9263` и нашёл 7 Critical +
   20 High package/CVE совпадений (6 и 15 уникальных CVE) в базовых
   Debian-пакетах: `perl-base`, glibc, ncurses, SQLite, ACL и gzip. У всех fix
-  state `not-fixed` или `wont-fix`; исключений нет.
+  state `not-fixed` или `wont-fix`; в том историческом run исключений не было.
 - Grype в `deploy.yml` до выкладки fail-closed блокирует исправимые High/Critical
   через `--only-fixed --fail-on high`. Независимый `image-scan.yml` раз в неделю и вручную берёт из
   Cloud Run все revisions с трафиком или tag, разрешает их только в ожидаемые
   `${IMAGE}@sha256:<digest>` и сканирует без `--only-fixed`. Сырой JSON передаёт
-  `scripts/evaluate_image_scan.py`. Сначала применяются exact CycloneDX VEX
+  `scripts/evaluate_image_scan.py`. Для exact FIPS VEX предварительно проверяются
+  selected runtime overrides через metadata-only guard A117. Затем применяются exact CycloneDX VEX
   `not_affected` и действующие временные waiver, затем оставшееся делится:
   Critical при любом fix state и High с `fixed`, пустым, `unknown` или
   незнакомым state блокируют; High с явным `not-fixed`/`wont-fix` попадает в
