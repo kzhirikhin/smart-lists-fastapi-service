@@ -8,7 +8,7 @@
 > Живой снимок устойчивых знаний о проекте. Перед работой сверяй его с кодом и
 > обновляй после существенных изменений.
 
-**Последнее обновление:** 2026-11-12 (локальное security-обновление OpenTelemetry API)
+**Последнее обновление:** 2026-11-12 (rollout заблокирован; serving FIPS проверен)
 
 **Состояние:** активная разработка
 
@@ -94,6 +94,14 @@ Artifact содержит режим FIPS/версию OpenSSL и только �
 признаки mounts/command overrides. Это не состояние памяти serving-процесса,
 не доказательство всех поздних загрузок OpenSSL и не основание автоматического VEX.
 Штатный offline evidence контейнер не запускает; runtime diagnostic отделён.
+Диагностика опубликована PR #103/main@d1fb01c; CI/CodeQL/dependency review прошли.
+В fips_probe job 43183151100 serving insights-api-00070-q8b, exact child
+534fcd9b…d802e870, показал Python 3.14.10, OpenSSL 3.5.7, FIPS=0 и 0 fips.so;
+релевантных runtime env, volumes и command overrides нет. Условие применимости
+CVE не найдено в проверенной копии/настройках; это не память live-процесса
+и не следующий candidate digest. Policy остаётся FAIL; VEX/waiver не добавлялись.
+353 pytest без сети и pip check прошли. Подробности и границы:
+`security/reviews/2026-11-12-fips-probe.md`.
 331 pytest без сети, pip check, production Docker build и runtime health=200
 прошли на Python 3.14.10/Linux. Старый wheel 1.45.0 ожидаемо роняет новые
 проверки установленной версии и отказа oversized-заголовка до парсера.
