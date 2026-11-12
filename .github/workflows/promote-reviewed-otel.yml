@@ -1,0 +1,90 @@
+name: Promote exact reviewed OpenTelemetry image
+
+# Единственный заранее рассмотренный candidate; произвольных image/SHA inputs нет.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-cloud-run
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14.10'
+      - name: Install hash-locked test wheels
+        run: pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
+      - name: Test without production credentials
+        run: pytest tests/ -q
+        env:
+          EXPECTED_CALLER_SA: test-caller@example.iam.gserviceaccount.com
+          SERVICE_AUDIENCE: https://insights-api.example.run.app
+
+  promote:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+      attestations: read
+      id-token: write
+    env:
+      GRYPE_DB_AUTO_UPDATE: 'true'
+      GRYPE_DB_VALIDATE_AGE: 'true'
+      GRYPE_DB_MAX_ALLOWED_BUILT_AGE: 120h
+      GRYPE_DB_REQUIRE_UPDATE_CHECK: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.14.10'
+      - name: Authenticate existing deployer
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/912709146180/locations/global/workloadIdentityPools/github/providers/github-provider
+          service_account: github-deployer@project-5b7c1bd1-572b-410d-826.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Configure registry reader
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+      - name: Install checksum-pinned verification tools
+        env:
+          GH_CLI_VERSION: 2.98.0
+          GH_CLI_SHA256: 3b8ac6b30336802fc1a858d7c084e11cdf24ac1a761ca90b68022d7d729208de
+          GRYPE_VERSION: 0.117.0
+          GRYPE_SHA256: 38525dab1e06f162ebaa02f94d82d1f807076b011a44180cf2777edf1a7b9c26
+        run: |
+          gh_archive="${RUNNER_TEMP}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz" -o "${gh_archive}"
+          echo "${GH_CLI_SHA256}  ${gh_archive}" | sha256sum -c -
+          tar -xzf "${gh_archive}" -C "${RUNNER_TEMP}"
+          sudo install "${RUNNER_TEMP}/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh
+          grype_archive="${RUNNER_TEMP}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz" -o "${grype_archive}"
+          echo "${GRYPE_SHA256}  ${grype_archive}" | sha256sum -c -
+          sudo tar -xzf "${grype_archive}" -C /usr/local/bin grype
+          grype db update
+          grype db status
+      - name: Reverify candidate, exact VEX and runtime before promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -m scripts.promote_reviewed_otel --output-dir "${RUNNER_TEMP}/otel-promotion"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: reviewed-otel-promotion-${{ github.run_id }}
+          path: ${{ runner.temp }}/otel-promotion/
+          if-no-files-found: warn
+          retention-days: 30

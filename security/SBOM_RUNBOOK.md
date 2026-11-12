@@ -256,3 +256,24 @@ match по 21 CVE. Финальный production run `33308851706` подтве�
 политику: до неё Critical=7 и High=20, подавлено VEX=27 и waiver=0, после неё
 Critical=0 и High=0, `Gate: PASS`; истёкших waiver match нет. Waiver
 по-прежнему пуст.
+
+
+## Точечный OpenTelemetry promotion (2026-11-12)
+
+Для подписанного candidate из deploy 43181145499 предусмотрен отдельный ручной
+`promote-reviewed-otel.yml`, main + production Environment, без произвольных inputs.
+Обычный build/deploy gate не меняется. До отдельного PR с exact VEX и
+`security/promotions/otel-1.45.1.json` ручной путь отказывает до мутаций.
+Record связывает parent/source/amd64 child, baseline, review PR и окно <=7 дней;
+review metadata обязана совпадать с exact VEX. Перед deploy заново проверяются
+подпись, FIPS/пакеты, selected runtime overrides, exact SBOM attachment и свежий
+полный Grype через существующий policy evaluator. Допускается только один
+not_affected CVE-2026-119170/python 3.14.10; никакие другие VEX/waiver в этом
+promotion не разрешены. Любая другая блокирующая находка или technical error
+остаётся стоп-краном. Полный test job предшествует production job.
+
+При recurrent scan exact FIPS VEX дополнительно защищён metadata-only runtime
+guard: изменение selected env/mounts/command overrides или service template
+блокирует job до применения VEX. Сам offline evidence по-прежнему не исполняет
+image. Вне GitHub concurrency остаётся TOCTOU относительно внешнего изменения
+control plane; snapshot/guard не объявляются атомарной политикой Cloud Run.

@@ -24,6 +24,7 @@ on:
       - security/vex/**
       - security/waivers.json
       - scripts/evaluate_image_scan.py
+      - scripts/fips_vex_guard.py
       - scripts/verify_attestation_certificate.py
       - scripts/verify_image_evidence.py
       - .github/workflows/image-scan.yml
@@ -353,6 +354,16 @@ jobs:
               echo "::error::Техническая ошибка Grype ${scan_code} для ${digest}"
               printf -- '### Image scan policy — %s\n\n- Gate: **ERROR**\n- Grype завершился с кодом %s\n' \
                 "${digest}" "${scan_code}" >> "${GITHUB_STEP_SUMMARY}"
+              failed=1
+              continue
+            fi
+
+            # Exact FIPS VEX нельзя применять после изменения runtime overrides.
+            if ! python -m scripts.fips_vex_guard \
+              --image-digest "${digest}" \
+              --vex-dir security/vex \
+              --output "${report_prefix}-fips-runtime.json"; then
+              echo "::error::Runtime conditions for exact FIPS VEX were not confirmed"
               failed=1
               continue
             fi
