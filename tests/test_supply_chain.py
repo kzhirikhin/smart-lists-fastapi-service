@@ -115,6 +115,40 @@ def _pins(filename: str) -> dict[str, str]:
     }
 
 
+class TestOpenTelemetrySecurity:
+    def test_installed_api_has_tracestate_dos_fix(self) -> None:
+        installed = tuple(int(part) for part in package_version("opentelemetry-api").split("."))
+        assert installed >= (1, 45, 1)
+
+    def test_all_locks_keep_tracestate_dos_fix(self) -> None:
+        for filename in ("requirements.in", "requirements.txt", "requirements-dev.txt"):
+            pinned = _pins(filename)["opentelemetry-api"]
+            assert tuple(int(part) for part in pinned.split(".")) >= (1, 45, 1)
+
+    def test_oversized_tracestate_is_discarded(self) -> None:
+        from unittest.mock import patch
+
+        from opentelemetry.trace import TraceState, get_current_span
+        from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+
+        header = ",".join(f"k{i}=" + "x" * 255 for i in range(32))
+        assert len(header) > 8192
+        propagator = TraceContextTextMapPropagator()
+        carrier = {"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"}
+        # Ограничение применяется до парсера, включая сумму нескольких HTTP-полей.
+        for headers in ([header], header.split(",")):
+            with patch.object(TraceState, "from_header", wraps=TraceState.from_header) as parse:
+                context = propagator.extract({**carrier, "tracestate": headers})
+                parse.assert_not_called()
+            span = get_current_span(context).get_span_context()
+            assert span.is_valid
+            assert list(span.trace_state.items()) == []
+        context = propagator.extract({**carrier, "tracestate": "a=b,c=d"})
+        assert list(get_current_span(context).get_span_context().trace_state.items()) == [
+            ("a", "b"), ("c", "d")
+        ]
+
+
 class TestPythonVersionAlignment:
     def test_runtime_has_emudhra_distrust_patch(self) -> None:
         # CVE-2026-115557: certifi не защищает прочие trust stores и vendored CA.

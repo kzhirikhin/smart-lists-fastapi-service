@@ -7,8 +7,8 @@ certifi==2026.10.19
 # Четыре DoS в ASN.1 decoder (CVE-2026-119194..119197); приходит через google-auth.
 pyasn1==0.6.5
 fastapi==0.142.2
-# Новая обязательная API-зависимость FastAPI; свежий 1.45.1 пока не выдержан.
-opentelemetry-api==1.45.0
+# CVE-2026-114603: линейный разбор tracestate и ограничение длины до парсера.
+opentelemetry-api==1.45.1
 google-genai==2.25.0
 google-auth==2.58.1
 pydantic-settings==2.15.0
